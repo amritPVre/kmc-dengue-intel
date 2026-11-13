@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { -webkit-text-size-adjust: 100%; }
+body { font-family: Inter, system-ui, 'Segoe UI', Roboto, Arial, sans-serif; }
+.leaflet-container { font-family: inherit; }
+.leaflet-tooltip { font-size: 12px; }
+@media print {
+  header, aside, nav, button, .no-print { display: none !important; }
+  main { padding: 0 !important; }
+  section { break-inside: avoid; box-shadow: none !important; }
+}

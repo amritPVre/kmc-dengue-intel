@@ -1,0 +1,136 @@
+import { useState, type ReactNode } from 'react';
+import { AlertTriangle, Bell, ClipboardList, FileText, LayoutDashboard, Map, Megaphone, Menu, Settings, Stethoscope, X } from 'lucide-react';
+import { ROLE_LABEL, useData, type Role } from '@/lib/store';
+import { href, type Route } from '@/lib/router';
+import { BOROUGHS, type BoroughCode } from '@/lib/types';
+import { fmtDate } from '@/lib/util';
+import { inputCls } from './ui';
+
+interface NavItem { key: Route['page']; label: string; href: string; icon: ReactNode; roles: Role[] }
+const NAV: NavItem[] = [
+  { key: 'overview', label: 'City overview', href: href.overview, icon: <LayoutDashboard size={18} />, roles: ['hq'] },
+  { key: 'boroughs', label: 'Boroughs', href: href.boroughs, icon: <Map size={18} />, roles: ['hq', 'borough'] },
+  { key: 'alerts', label: 'Alerts', href: href.alerts, icon: <Bell size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
+  { key: 'field', label: 'Field operations', href: href.field, icon: <ClipboardList size={18} />, roles: ['hq', 'borough', 'ward', 'field'] },
+  { key: 'cases', label: 'Case reporting', href: href.cases, icon: <Stethoscope size={18} />, roles: ['hq', 'borough', 'ward', 'lab'] },
+  { key: 'citizen', label: 'Citizen reports', href: href.citizen, icon: <Megaphone size={18} />, roles: ['hq', 'borough', 'ward'] },
+  { key: 'sitrep', label: 'Situation report', href: href.sitrep, icon: <FileText size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
+  { key: 'settings', label: 'Settings & model', href: href.settings, icon: <Settings size={18} />, roles: ['hq'] },
+];
+
+export function homeFor(role: Role, borough: BoroughCode, ward: number) {
+  if (role === 'hq') return href.overview;
+  if (role === 'borough') return href.borough(borough);
+  if (role === 'field') return href.field;
+  if (role === 'lab') return href.cases;
+  return href.ward(ward);
+}
+
+export function Layout({ route, children }: { route: Route; children: ReactNode }) {
+  const { db, a, scope, setScope, toast, roleLocked, signOut } = useData();
+  const [open, setOpen] = useState(false);
+  const newAlerts = db ? db.alerts.filter((x) => x.status === 'New' && (scope.role === 'hq' || (scope.role === 'borough' ? db.wards.find((w) => w.ward === x.ward)?.borough === scope.borough : x.ward === scope.ward))).length : 0;
+  const myHome = { key: scope.role === 'borough' ? 'borough' : 'ward', label: scope.role === 'borough' ? `Borough ${scope.borough}` : `Ward ${scope.ward}`, href: scope.role === 'borough' ? href.borough(scope.borough) : href.ward(scope.ward) };
+  const items = NAV.filter((n) => n.roles.includes(scope.role));
+  const active = (k: string) => route.page === k || (k === 'boroughs' && route.page === 'borough' && scope.role === 'hq');
+
+  const changeRole = (role: Role) => {
+    const s = { ...scope, role };
+    setScope(s);
+    window.location.hash = homeFor(role, s.borough, s.ward);
+  };
+
+  const nav = (
+    <nav className="flex flex-col gap-0.5 p-2">
+      {scope.role !== 'hq' && scope.role !== 'lab' && (
+        <a href={myHome.href} onClick={() => setOpen(false)}
+          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${route.page === myHome.key ? 'bg-kmc-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}>
+          <Map size={18} /> {myHome.label}
+        </a>
+      )}
+      {items.map((n) => (
+        <a key={n.key} href={n.href} onClick={() => setOpen(false)}
+          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${active(n.key) ? 'bg-kmc-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}>
+          {n.icon}<span className="flex-1">{n.label}</span>
+          {n.key === 'alerts' && newAlerts > 0 && <span className={`rounded-full px-1.5 text-[11px] font-bold ${active('alerts') ? 'bg-white text-kmc-700' : 'bg-red-600 text-white'}`}>{newAlerts}</span>}
+        </a>
+      ))}
+    </nav>
+  );
+
+  return (
+    <div className="min-h-screen">
+      {db?.mode !== 'supabase' && (
+        <div className="flex items-center justify-center gap-2 bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-900">
+          <AlertTriangle size={14} className="shrink-0" /> Demo mode — all case, survey and weather figures are synthetic, not real KMC data.
+        </div>
+      )}
+      <header className="sticky top-0 z-[1000] border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex items-center gap-3 px-3 py-2.5 lg:px-5">
+          <button className="rounded p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button>
+          <a href={homeFor(scope.role, scope.borough, scope.ward)} className="flex shrink-0 items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-kmc-600 text-sm font-bold text-white">D</span>
+            <span className="leading-tight">
+              <span className="block whitespace-nowrap text-sm font-bold text-ink">KMC Dengue Intelligence</span>
+              <span className="hidden text-[11px] text-slate-500 sm:block">Kolkata Municipal Corporation · 16 boroughs · {db?.wards.length ?? 144} wards</span>
+            </span>
+          </a>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {a && <span className="hidden text-xs text-slate-500 md:inline">Data as of {fmtDate(db!.asOf)}</span>}
+            {roleLocked ? (
+              <button onClick={signOut} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50">Sign out</button>
+            ) : (
+              <select aria-label="Role" className={`${inputCls} w-auto max-w-[11rem] py-1.5 text-xs sm:max-w-none`} value={scope.role} onChange={(e) => changeRole(e.target.value as Role)}>
+                {(Object.keys(ROLE_LABEL) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+              </select>
+            )}
+            {!roleLocked && scope.role === 'borough' && (
+              <select aria-label="Borough" className={`${inputCls} w-auto py-1.5 text-xs`} value={scope.borough}
+                onChange={(e) => { const b = e.target.value as BoroughCode; setScope({ ...scope, borough: b }); window.location.hash = href.borough(b); }}>
+                {BOROUGHS.map((b) => <option key={b} value={b}>Borough {b}</option>)}
+              </select>
+            )}
+            {!roleLocked && (scope.role === 'ward' || scope.role === 'field' || scope.role === 'councillor') && db && (
+              <select aria-label="Ward" className={`${inputCls} w-auto py-1.5 text-xs`} value={scope.ward}
+                onChange={(e) => { const w = Number(e.target.value); const b = db.wards.find((x) => x.ward === w)!.borough; setScope({ ...scope, ward: w, borough: b }); window.location.hash = scope.role === 'field' ? href.field : href.ward(w); }}>
+                {db.wards.map((w) => <option key={w.ward} value={w.ward}>Ward {w.ward} (Borough {w.borough})</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+      </header>
+      <div className="flex">
+        <aside className="sticky top-[57px] hidden h-[calc(100vh-57px)] w-60 shrink-0 overflow-y-auto border-r border-slate-200 bg-white lg:block">
+          {nav}
+          <div className="mx-3 mt-4 rounded-lg bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500">
+            Signed in as <b className="text-slate-700">{ROLE_LABEL[scope.role]}</b>
+            {scope.role === 'borough' && <> · Borough {scope.borough}</>}
+            {(scope.role === 'ward' || scope.role === 'field' || scope.role === 'councillor') && <> · Ward {scope.ward}</>}
+          </div>
+        </aside>
+        {open && (
+          <div className="fixed inset-0 z-[1500] bg-slate-900/40 lg:hidden" onClick={() => setOpen(false)}>
+            <div className="h-full w-72 bg-white" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b px-3 py-3"><b className="text-sm">Menu</b><button onClick={() => setOpen(false)} aria-label="Close menu"><X size={18} /></button></div>
+              {nav}
+            </div>
+          </div>
+        )}
+        <main className="min-w-0 flex-1 px-3 py-4 lg:px-6 lg:py-6">{children}</main>
+      </div>
+      {toast && <div className="fixed bottom-4 left-1/2 z-[3000] -translate-x-1/2 rounded-lg bg-ink px-4 py-2 text-sm text-white shadow-lg" role="status">{toast}</div>}
+    </div>
+  );
+}
+
+export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-bold text-ink lg:text-2xl">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    </div>
+  );
+}

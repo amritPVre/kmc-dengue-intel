@@ -1,0 +1,29 @@
+-- Scheduled jobs (Supabase: enable the pg_cron and pg_net extensions first).
+-- Replace <PROJECT_REF> and store the service-role key in Vault as 'service_role_key'.
+--
+--   daily  06:00 IST (00:30 UTC): pull weather, recompute ward risk scores
+--   weekly Monday 09:00 IST (03:30 UTC): raise alerts for the week
+--
+-- create extension if not exists pg_cron;
+-- create extension if not exists pg_net;
+--
+-- select cron.schedule('dengue-weather-daily', '30 0 * * *', $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/fetch-weather',
+--     headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'))
+--   ) $$);
+--
+-- select cron.schedule('dengue-risk-daily', '45 0 * * *', $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/compute-risk',
+--     headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')),
+--     body := '{"raiseAlerts": false}'::jsonb
+--   ) $$);
+--
+-- select cron.schedule('dengue-alerts-weekly', '30 3 * * 1', $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/compute-risk',
+--     headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')),
+--     body := '{"raiseAlerts": true}'::jsonb
+--   ) $$);
+select 1;
