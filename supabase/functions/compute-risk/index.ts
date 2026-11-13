@@ -5,7 +5,7 @@
 // POST body: { "raiseAlerts": boolean }   Auth: service-role bearer token.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
-  DEFAULT_CONFIG, clusters, entomological, exceedance, predicted, scoreWard, type CasePoint, type Signal,
+  DEFAULT_CONFIG, clusters, daysToClear, entomological, exceedance, predicted, scoreWard, waterSignal, type CasePoint, type Signal,
 } from '../_shared/risk-engine.ts';
 
 const DAY = 86400000;
@@ -37,12 +37,13 @@ Deno.serve(async (req) => {
   const n = weeks.length;
   const idx = new Map(weeks.map((w, i) => [w, i]));
 
-  const [wards, cases, surveys, sites, weather] = await Promise.all([
-    all<any>('v_wards_active', 'ward_no, neighbours, population'),
+  const [wards, cases, surveys, sites, weather, water] = await Promise.all([
+    all<any>('v_wards_active', 'ward_no, neighbours, population, area_km2'),
     all<any>('dengue_cases', 'id, ward_no, reported_on, lat, lng', (q) => q.gte('reported_on', weeks[0])),
     all<any>('larval_surveys', 'ward_no, houses_visited, houses_positive, containers_inspected, containers_positive', (q) => q.gte('survey_date', addDays(asOf, -13))),
     all<any>('breeding_sites', 'ward_no', (q) => q.eq('status', 'Open')),
     all<any>('weather_weekly', 'week_start, rain_mm, t_mean_c, rh_pct', (q) => q.gte('week_start', weeks[0])),
+    all<any>('water_detections', 'ward_no, status, confidence, water_since', (q) => q.in('status', ['New', 'Confirmed']).gte('water_since', addDays(asOf, -30))),
   ]);
 
   const weekly = new Map<number, number[]>(wards.map((w) => [w.ward_no, new Array(n).fill(0)]));
@@ -68,6 +69,16 @@ Deno.serve(async (req) => {
   const meanT = last2.length ? last2.reduce((a, w) => a + Number(w.t_mean_c), 0) / last2.length : 28;
   const meanRh = last2.length ? last2.reduce((a, w) => a + Number(w.rh_pct), 0) / last2.length : 75;
   const pop = new Map(wards.map((w) => [w.ward_no, Number(w.population ?? 31000)]));
+  const area = new Map(wards.map((w) => [w.ward_no, Math.max(Number(w.area_km2 ?? 1), 0.5)]));
+  const wet = new Map<number, { index: number; urgent: number; past: number }>();
+  for (const d of water) {
+    const acc = wet.get(d.ward_no) ?? { index: 0, urgent: 0, past: 0 };
+    const left = daysToClear(d.water_since, asOf, meanT);
+    acc.index += (d.status === 'Confirmed' ? 1 : Number(d.confidence)) / (area.get(d.ward_no) ?? 1);
+    if (left >= 0 && left <= 2) acc.urgent++;
+    if (left < 0) acc.past++;
+    wet.set(d.ward_no, acc);
+  }
   const hist = wards.map((w) => ({ ward: w.ward_no, r: weekly.get(w.ward_no)!.slice(0, n - 8).reduce((a, b) => a + b, 0) / pop.get(w.ward_no)! }))
     .sort((a, b) => a.r - b.r);
   const pct = new Map(hist.map((h, i) => [h.ward, i / Math.max(1, hist.length - 1)]));
@@ -86,9 +97,11 @@ Deno.serve(async (req) => {
       neighbourPopulation: nb.reduce((a, x) => a + (pop.get(x) ?? 0), 0),
       breteauIndex: bi, houseIndex: hi, openBreedingSites: openSites.get(w.ward_no) ?? 0,
       rainLagMm: rainLag, meanTempC: meanT, meanRhPct: meanRh, historicalPercentile: pct.get(w.ward_no) ?? 0.5,
+      standingWaterIndex: wet.get(w.ward_no)?.index ?? 0,
     }, DEFAULT_CONFIG);
     scores.push({ ward_no: w.ward_no, as_of: asOf, score: r.score, level: r.level, drivers: r.drivers, forecast: r.forecast, model_version: r.modelVersion });
-    for (const s of [exceedance(w.ward_no, series), entomological(w.ward_no, bi, hi), predicted(r)]) if (s) signals.push(s);
+    const wa = wet.get(w.ward_no);
+    for (const s of [exceedance(w.ward_no, series), entomological(w.ward_no, bi, hi), predicted(r), waterSignal(w.ward_no, wa?.urgent ?? 0, wa?.past ?? 0)]) if (s) signals.push(s);
   }
   signals.push(...clusters(points, daysBetween(weeks[0], asOf)));
 

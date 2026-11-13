@@ -71,3 +71,49 @@ describe('demo data + analytics', () => {
     expect(y2025).toBeGreaterThan(600);
   });
 });
+
+import { aedesDevelopmentDays, daysToClear, waterSignal } from '@shared/risk-engine';
+import { normalizeVision } from '@shared/vision';
+import { isActiveWater } from '@/lib/analytics';
+
+describe('standing water', () => {
+  it('Aedes development shortens as it gets warmer', () => {
+    expect(aedesDevelopmentDays(30)).toBe(7);
+    expect(aedesDevelopmentDays(25)).toBe(10);
+    expect(aedesDevelopmentDays(20)).toBe(16);
+    expect(aedesDevelopmentDays(10)).toBe(30);
+  });
+  it('counts days left to clear, with a 1-day margin', () => {
+    expect(daysToClear('2026-11-04', '2026-11-13', 25)).toBe(0); // 10-day window, 9 days elapsed, 1-day margin
+    expect(daysToClear('2026-11-12', '2026-11-13', 30)).toBe(5);
+    expect(daysToClear('2026-11-01', '2026-11-13', 30)).toBeLessThan(0);
+  });
+  it('raises a water alert for urgent or missed spots only', () => {
+    expect(waterSignal(1, 2, 0)).toBeNull();
+    expect(waterSignal(1, 3, 0)?.level).toBe('Watch');
+    expect(waterSignal(1, 0, 1)?.level).toBe('Warning');
+  });
+  it('standing water raises the risk score', () => {
+    const dry = scoreWard({ ...quiet, standingWaterIndex: 0 });
+    const wet = scoreWard({ ...quiet, standingWaterIndex: 4 });
+    expect(wet.score).toBeGreaterThan(dry.score);
+    expect(wet.drivers.find((d) => d.key === 'standingWater')!.contribution).toBeGreaterThan(0);
+  });
+  it('normalises messy vision output safely', () => {
+    const v = normalizeVision({ standing_water: 'true', confidence: 1.7, kind: 'discarded tyres', objects: [{ label: 'tyre', count: '3', holds_water: 'YES' }], aedes_risk: 'high', larvae_visible: 'maybe' });
+    expect(v.standingWater).toBe(true);
+    expect(v.confidence).toBe(1);
+    expect(v.kind).toBe('Discarded tyres');
+    expect(v.objects[0]).toEqual({ label: 'tyre', count: 3, holdsWater: 'yes' });
+    expect(v.aedesRisk).toBe('High');
+    expect(v.larvaeVisible).toBe('unclear');
+    expect(normalizeVision(null).standingWater).toBe(false);
+    expect(normalizeVision({ standing_water: false }).kind).toBe('No standing water');
+  });
+  it('demo data has active, cleared and false-alarm water spots from several sources', () => {
+    const db = generateDemo('2026-11-13');
+    expect(db.detections.filter(isActiveWater).length).toBeGreaterThan(20);
+    expect(new Set(db.detections.map((d) => d.source)).size).toBeGreaterThanOrEqual(5);
+    expect(db.detections.some((d) => d.status === 'False alarm')).toBe(true);
+  });
+});

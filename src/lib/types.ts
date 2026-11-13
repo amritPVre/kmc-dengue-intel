@@ -1,4 +1,5 @@
 import type { AlertLevel, AlertType, RiskResult, TaskType } from '@shared/risk-engine';
+import type { VisionResult, WaterKind } from '@shared/vision';
 
 export type BoroughCode =
   | 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI' | 'VII' | 'VIII'
@@ -115,6 +116,44 @@ export interface CitizenReport {
   text: string;
 }
 
+export type DetectionSource =
+  | 'Satellite radar' | 'Satellite optical' | 'Drone AI' | 'Field photo AI' | 'Citizen photo AI' | 'Rain + terrain model' | 'Flood sensor';
+export const DETECTION_SOURCES: DetectionSource[] = ['Satellite radar', 'Satellite optical', 'Drone AI', 'Field photo AI', 'Citizen photo AI', 'Rain + terrain model', 'Flood sensor'];
+
+/** A place where standing water was detected or predicted. Candidates are verified by ward teams. */
+export interface WaterDetection {
+  id: string;
+  ward: number;
+  lat: number;
+  lng: number;
+  areaM2?: number;
+  source: DetectionSource;
+  sensor?: string; // Sentinel-1C, Sentinel-2B, NISAR, drone mission id, FFEWS sensor id…
+  kind: WaterKind;
+  detectedAt: string; // ISO datetime
+  waterSince: string; // ISO date the water was first seen (or the rain that caused it)
+  confidence: number; // 0–1
+  status: 'New' | 'Confirmed' | 'False alarm' | 'Cleared';
+  aedesRisk: 'High' | 'Medium' | 'Low';
+  ai?: Pick<VisionResult, 'summary' | 'objects' | 'larvaeVisible' | 'recommendedAction' | 'reasons'> & { model: string };
+  photo?: string; // object URL (demo) or storage path
+  taskId?: string;
+  verifiedAt?: string;
+  clearedOn?: string;
+}
+
+export interface SatellitePass {
+  id: string;
+  sensor: 'Sentinel-1' | 'Sentinel-2' | 'NISAR';
+  platform: string;
+  date: string;
+  cloudPct?: number;
+  detections: number;
+  status: 'Processed' | 'Too cloudy' | 'Awaiting data';
+}
+
+export interface RainDay { date: string; mm: number }
+
 export interface Db {
   mode: 'demo' | 'supabase';
   asOf: string; // ISO date of "today"
@@ -128,7 +167,14 @@ export interface Db {
   alerts: Alert[];
   citizen: CitizenReport[];
   teams: Record<number, string[]>;
+  detections: WaterDetection[];
+  passes: SatellitePass[];
+  rainDaily: RainDay[];
+  /** 0–1 waterlogging susceptibility per ward (historical satellite water frequency + terrain). */
+  susceptibility: Record<number, number>;
 }
+
+export interface WardWater { active: number; urgent: number; pastWindow: number; index: number }
 
 export interface WardStats {
   ward: number;
@@ -144,7 +190,8 @@ export interface WardStats {
   openSites: number;
   openTasks: number;
   overdueTasks: number;
+  water: WardWater;
   risk: RiskResult;
 }
 
-export type { AlertLevel, AlertType, RiskResult, TaskType };
+export type { AlertLevel, AlertType, RiskResult, TaskType, WaterKind };

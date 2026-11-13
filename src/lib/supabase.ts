@@ -3,7 +3,7 @@
 // Row-level security (supabase/migrations/0002_rls.sql) limits each signed-in user to
 // their borough or ward, so the same queries serve HQ, borough and ward roles.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Alert, BreedingSite, CitizenReport, Db, DengueCase, FieldTask, LarvalSurvey, Ward, WeatherWeek } from './types';
+import type { Alert, BreedingSite, CitizenReport, Db, DengueCase, FieldTask, LarvalSurvey, SatellitePass, Ward, WaterDetection, WeatherWeek } from './types';
 import { addDays, mondayOf } from './util';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -51,7 +51,7 @@ export async function myProfile(): Promise<Profile | null> {
 export async function loadFromSupabase(asOf: string, weeksBack = 100): Promise<Db> {
   const since = addDays(mondayOf(asOf), -7 * weeksBack);
   const profile = await myProfile();
-  const [wards, weather, cases, surveys, sites, tasks, alerts, citizen, teams] = await Promise.all([
+  const [wards, weather, cases, surveys, sites, tasks, alerts, citizen, teams, detections, passes, rain, susc] = await Promise.all([
     all<any>('v_wards_active', 'ward_no, borough, centroid_lng, centroid_lat, area_km2, bbox, neighbours, boundary_source, population'),
     all<any>('weather_weekly', 'week_start, rain_mm, t_mean_c, rh_pct', (q) => q.gte('week_start', since)),
     all<any>('dengue_cases', 'id, ward_no, reported_on, onset_on, test_type, source, age_band, sex, lat, lng, hospitalised, severity, dedupe_key', (q) => q.gte('reported_on', since)),
@@ -61,6 +61,11 @@ export async function loadFromSupabase(asOf: string, weeksBack = 100): Promise<D
     all<any>('alerts', 'id, ward_no, alert_type, level, title, detail, created_at, status, cluster_lng, cluster_lat, case_ids', (q) => q.gte('created_at', addDays(asOf, -90))),
     all<any>('citizen_reports', 'id, ward_no, kind, reported_at, status, text', (q) => q.gte('reported_at', addDays(asOf, -30))),
     all<any>('teams', 'ward_no, name'),
+    all<any>('water_detections', 'id, ward_no, lat, lng, area_m2, source, sensor, kind, detected_at, water_since, confidence, status, aedes_risk, ai, photo_path, task_id, verified_at, cleared_on',
+      (q) => q.gte('water_since', addDays(asOf, -60))),
+    all<any>('satellite_passes', 'id, sensor, platform, pass_date, cloud_pct, detections, status', (q) => q.gte('pass_date', addDays(asOf, -60))),
+    all<any>('rain_daily_city', 'day, rain_mm', (q) => q.gte('day', addDays(asOf, -120))),
+    all<any>('ward_susceptibility', 'ward_no, susceptibility'),
   ]);
   const weeks: string[] = [];
   for (let w = since; w <= mondayOf(asOf); w = addDays(w, 7)) weeks.push(w);
@@ -107,6 +112,14 @@ export async function loadFromSupabase(asOf: string, weeksBack = 100): Promise<D
     })).sort((x, y) => y.createdAt.localeCompare(x.createdAt)),
     citizen: citizen.map((r): CitizenReport => ({ id: r.id, ward: r.ward_no, kind: r.kind, reportedAt: r.reported_at, status: r.status, text: r.text })),
     teams: teamMap,
+    detections: detections.map((r): WaterDetection => ({
+      id: r.id, ward: r.ward_no, lat: r.lat, lng: r.lng, areaM2: r.area_m2 ?? undefined, source: r.source, sensor: r.sensor ?? undefined, kind: r.kind,
+      detectedAt: r.detected_at, waterSince: r.water_since, confidence: Number(r.confidence), status: r.status, aedesRisk: r.aedes_risk,
+      ai: r.ai ?? undefined, photo: r.photo_path ?? undefined, taskId: r.task_id ?? undefined, verifiedAt: r.verified_at ?? undefined, clearedOn: r.cleared_on ?? undefined,
+    })),
+    passes: passes.map((r): SatellitePass => ({ id: r.id, sensor: r.sensor, platform: r.platform, date: r.pass_date, cloudPct: r.cloud_pct ?? undefined, detections: r.detections, status: r.status })),
+    rainDaily: rain.map((r) => ({ date: r.day, mm: Number(r.rain_mm) })),
+    susceptibility: Object.fromEntries(susc.map((r) => [r.ward_no, Number(r.susceptibility)])),
   };
 }
 
@@ -144,4 +157,20 @@ export const repo = {
   }))),
   updateAlert: async (id: string, p: { status: string }) => check(await sb().from('alerts').update(p).eq('id', id)),
   updateCitizen: async (id: string, p: { status: string }) => check(await sb().from('citizen_reports').update(p).eq('id', id)),
+  insertDetection: async (d: WaterDetection) => (await insertReturningIds('water_detections', [{
+    ward_no: d.ward, lat: d.lat, lng: d.lng, area_m2: d.areaM2 ?? null, source: d.source, sensor: d.sensor ?? null, kind: d.kind,
+    water_since: d.waterSince, confidence: d.confidence, status: d.status, aedes_risk: d.aedesRisk, ai: d.ai ?? null, photo_path: d.photo && !d.photo.startsWith('blob:') ? d.photo : null,
+  }]))[0],
+  updateDetection: async (id: string, p: { status: string; taskId?: string; clearedOn?: string }) => check(await sb().from('water_detections').update({
+    status: p.status, task_id: p.taskId && /^[0-9a-f-]{36}$/.test(p.taskId) ? p.taskId : undefined, cleared_on: p.clearedOn ?? undefined, verified_at: new Date().toISOString(),
+  }).eq('id', id)),
+  /** Uploads a photo to Storage and asks the analyze-image Edge Function to run AI vision on it. */
+  analyzeImage: async (file: Blob, body: Record<string, unknown>) => {
+    const path = `uploads/${crypto.randomUUID()}.${(file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`;
+    const up = await sb().storage.from('detection-photos').upload(path, file, { contentType: file.type || 'image/jpeg' });
+    if (up.error) throw new Error(up.error.message);
+    const { data, error } = await sb().functions.invoke('analyze-image', { body: { ...body, photoPath: path } });
+    if (error) throw new Error(error.message);
+    return { ...(data as Record<string, unknown>), photoPath: path };
+  },
 };

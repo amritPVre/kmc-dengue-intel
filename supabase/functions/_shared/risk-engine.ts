@@ -17,7 +17,7 @@
 export const MODEL_VERSION = 'baseline-logit-0.1';
 
 export type RiskLevel = 'Low' | 'Moderate' | 'High' | 'Very high';
-export type AlertType = 'exceedance' | 'cluster' | 'entomological' | 'predicted';
+export type AlertType = 'exceedance' | 'cluster' | 'entomological' | 'predicted' | 'water';
 export type AlertLevel = 'Watch' | 'Warning' | 'Outbreak';
 
 export interface WardWeekInput {
@@ -42,6 +42,11 @@ export interface WardWeekInput {
   meanRhPct: number;
   /** Ward's long-run incidence rank among all wards, 0 (lowest) … 1 (highest). */
   historicalPercentile: number;
+  /**
+   * Standing-water index: confidence-weighted active water hotspots per km² (satellite, drone,
+   * photo AI and rain-model detections not yet cleared). Optional; 0 when detection is not running.
+   */
+  standingWaterIndex?: number;
 }
 
 export interface EngineConfig {
@@ -58,12 +63,14 @@ export interface EngineConfig {
     clusterDays: number;
     clusterMinCases: number;
     predictedRiskScore: number;
+    /** Raise a water alert when this many active hotspots in a ward must be cleared within 2 days. */
+    waterUrgentHotspots: number;
   };
 }
 
 export type FeatureKey =
   | 'recentIncidence' | 'trend' | 'neighbourPressure' | 'breteau' | 'houseIndex'
-  | 'breedingSites' | 'rainfallLag' | 'temperature' | 'humidity' | 'history';
+  | 'breedingSites' | 'standingWater' | 'rainfallLag' | 'temperature' | 'humidity' | 'history';
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
   recentIncidence: 'Recent cases per 10,000 people',
@@ -72,6 +79,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   breteau: 'Breteau Index (larval density)',
   houseIndex: 'House Index (% houses with larvae)',
   breedingSites: 'Open breeding sites',
+  standingWater: 'Standing water detected (satellite, drone, photo AI)',
   rainfallLag: 'Rainfall 2–6 weeks ago',
   temperature: 'Temperature suitability for Aedes',
   humidity: 'Humidity',
@@ -79,7 +87,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
 };
 
 export const DEFAULT_CONFIG: EngineConfig = {
-  intercept: -3.6,
+  intercept: -3.85,
   weights: {
     recentIncidence: 0.9,
     trend: 0.55,
@@ -87,6 +95,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
     breteau: 0.8,
     houseIndex: 0.35,
     breedingSites: 0.3,
+    standingWater: 0.55,
     rainfallLag: 0.6,
     temperature: 0.4,
     humidity: 0.2,
@@ -103,6 +112,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
     clusterDays: 14,
     clusterMinCases: 3,
     predictedRiskScore: 75,
+    waterUrgentHotspots: 3,
   },
 };
 
@@ -132,6 +142,7 @@ export function features(i: WardWeekInput): Record<FeatureKey, number> {
     breteau: i.breteauIndex == null ? 0.5 : clamp(i.breteauIndex / 20, 0, 2.5),
     houseIndex: i.houseIndex == null ? 0.5 : clamp(i.houseIndex / 10, 0, 2.5),
     breedingSites: Math.log1p(Math.max(0, i.openBreedingSites)) / Math.log1p(10),
+    standingWater: clamp(Math.log1p(Math.max(0, i.standingWaterIndex ?? 0)) / Math.log1p(4), 0, 2),
     rainfallLag: clamp(i.rainLagMm / 250, 0, 2),
     temperature: Math.exp(-(((i.meanTempC - 29) / 4) ** 2)),
     humidity: clamp((i.meanRhPct - 60) / 25, 0, 1),
@@ -314,6 +325,7 @@ export function clusters(points: CasePoint[], todayIndex: number, cfg: EngineCon
 // ---------- SOP: signal → field tasks ----------
 
 export type TaskType =
+  | 'Clear standing water'
   | 'House-to-house larval survey' | 'Source reduction drive' | 'Larviciding'
   | 'Focal space spraying' | 'Fever survey' | 'Notice to property owner (Sec 496A)'
   | 'Construction site inspection' | 'Community awareness (IEC)' | 'Reporting review with labs';
@@ -342,7 +354,42 @@ export const SOP: Record<AlertType, TaskTemplate[]> = {
     { type: 'Construction site inspection', title: 'Inspect construction sites and vacant plots', slaHours: 120, priority: 'P2' },
     { type: 'Source reduction drive', title: 'Pre-emptive source reduction in hotspots', slaHours: 120, priority: 'P2' },
   ],
+  water: [
+    { type: 'Clear standing water', title: 'Drain or empty every flagged water spot before its clear-by date', slaHours: 24, priority: 'P1' },
+    { type: 'Larviciding', title: 'Larvicide water that cannot be drained within a day', slaHours: 24, priority: 'P1' },
+    { type: 'Notice to property owner (Sec 496A)', title: 'Serve notices where water is on private premises', slaHours: 72, priority: 'P2' },
+  ],
 };
+
+// ---------- standing water: the breeding window ----------
+
+/**
+ * Approximate days for Aedes aegypti to develop from egg to adult in standing water at a given
+ * mean temperature: a degree-day model with a 11 °C threshold and ~140 degree-days
+ * (≈7 days at 30 °C, ≈10 at 25 °C, ≈16 at 20 °C). Water cleared before this point stops
+ * the next generation of adult mosquitoes. Configurable; validate against KMC entomology.
+ */
+export function aedesDevelopmentDays(meanTempC: number, degreeDays = 140, thresholdC = 11): number {
+  if (meanTempC <= thresholdC + 1) return 30;
+  return clamp(Math.round(degreeDays / (meanTempC - thresholdC)), 6, 30);
+}
+
+/** Days left to clear water first seen on `waterSince` (ISO date), as of `today`, keeping a 1-day safety margin. */
+export function daysToClear(waterSince: string, today: string, meanTempC: number): number {
+  const elapsed = Math.round((Date.parse(today) - Date.parse(waterSince)) / 86400000);
+  return aedesDevelopmentDays(meanTempC) - 1 - elapsed;
+}
+
+/** Water alert: several hotspots in a ward close to (or past) their breeding window. */
+export function waterSignal(ward: number, urgent: number, pastWindow: number, cfg: EngineConfig = DEFAULT_CONFIG): Signal | null {
+  if (urgent < cfg.alerts.waterUrgentHotspots && pastWindow === 0) return null;
+  return {
+    ward, type: 'water', level: pastWindow > 0 ? 'Warning' : 'Watch',
+    title: pastWindow > 0 ? `${pastWindow} water spot(s) past the breeding window` : `${urgent} water spots to clear within 2 days`,
+    detail: `${urgent} active standing-water hotspot(s) must be cleared within 2 days` +
+      (pastWindow > 0 ? ` and ${pastWindow} have stood long enough for adult mosquitoes to emerge; add adult-mosquito control around them.` : '.'),
+  };
+}
 
 // ---------- entomological indices ----------
 

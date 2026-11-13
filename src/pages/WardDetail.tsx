@@ -10,6 +10,8 @@ import { DriverBars, ForecastChart, IndicesChart } from '@/components/Charts';
 import { ALERT_TONE } from './Overview';
 import { TaskList } from './FieldOps';
 import { SiteForm, SurveyForm } from './forms';
+import { daysLeft, isActiveWater } from '@/lib/analytics';
+import { ClearBy, SpotActions, urgencyColor } from './Water';
 
 const SITE_COLOR = { Open: '#C2410C', Treated: '#2563EB', Closed: '#64748B' } as const;
 
@@ -40,11 +42,14 @@ export function WardDetail({ ward }: { ward: number }) {
       const v = byWeek.get(wk)!;
       return { week: fmtDate(wk, false), HI: v.hv ? (v.hp / v.hv) * 100 : null, BI: v.hv ? (v.cp / v.hv) * 100 : null };
     });
+    const water = db.detections.filter((d) => d.ward === ward && isActiveWater(d) && d.waterSince >= addDays(db.asOf, -30))
+      .sort((x, y) => daysLeft(x, db.asOf, a.meanTempC) - daysLeft(y, db.asOf, a.meanTempC));
     const points: MapPoint[] = [
+      ...water.map((d) => ({ id: d.id, lat: d.lat, lng: d.lng, color: urgencyColor(daysLeft(d, db.asOf, a.meanTempC)), radius: 6, ring: d.status === 'New', label: `Water: ${d.kind} (${d.source})` })),
       ...sites.map((x) => ({ id: x.id, lat: x.lat, lng: x.lng, color: SITE_COLOR[x.status], radius: 5, label: `${x.type} — ${x.status} (${x.detectedBy})` })),
       ...(scope.role === 'councillor' ? [] : cases.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng, color: '#7C3AED', radius: 4, label: `Case reported ${fmtDate(c.reportedOn)} · ${c.ageBand} ${c.sex}` }))),
     ];
-    return { cases, sites, tasks, alerts, clusterCircles, indices, points };
+    return { cases, sites, tasks, alerts, clusterCircles, indices, points, water };
   }, [db, a, w, ward, scope.role]);
 
   if (!db || !a) return null;
@@ -91,7 +96,7 @@ export function WardDetail({ ward }: { ward: number }) {
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-5">
-        <Card className="xl:col-span-3" title="Ward map" subtitle="Purple: cases in the last 4 weeks · orange: open breeding sites · blue: treated · dashed ring: case cluster">
+        <Card className="xl:col-span-3" title="Ward map" subtitle="Water spots by days left (dark red past window, red ≤ 2, amber ≤ 5, green later) · purple: recent cases · dashed ring: case cluster">
           <WardMap stats={a.stats} wards={db.wards.filter((x) => x.ward === ward || w.neighbours.includes(x.ward))} focusWards={[ward]} highlight={ward}
             metric="risk" points={derived.points} circles={derived.clusterCircles} height={400} />
         </Card>
@@ -114,6 +119,23 @@ export function WardDetail({ ward }: { ward: number }) {
           )}
         </Card>
       </div>
+
+      <Card className="mt-4" title={`Standing water — ${derived.water.length} active spot${derived.water.length === 1 ? '' : 's'}`}
+        subtitle={`Clear each before Aedes can emerge (about ${a.devDays} days at ${a.meanTempC.toFixed(1)} °C)`} action={<a href={href.water} className="text-sm font-medium text-kmc-700">All water spots →</a>}>
+        {derived.water.length === 0 ? <Empty>No active standing-water spots in this ward.</Empty> : (
+          <Table head={['Clear by', 'What', 'Found by', 'Status', '']}>
+            {derived.water.map((d) => (
+              <tr key={d.id} className="align-top">
+                <td className="px-2 py-2"><ClearBy left={daysLeft(d, db.asOf, a.meanTempC)} /></td>
+                <td className="px-2 py-2"><div className="font-medium">{d.kind}</div>{d.ai?.recommendedAction && <div className="text-xs text-slate-500">{d.ai.recommendedAction}</div>}</td>
+                <td className="px-2 py-2 text-xs">{d.source}{d.sensor ? ` · ${d.sensor}` : ''} · {Math.round(d.confidence * 100)}%</td>
+                <td className="px-2 py-2"><Pill tone={d.status === 'New' ? 'slate' : 'amber'}>{d.status === 'New' ? 'Not checked' : d.status}</Pill></td>
+                <td className="px-2 py-2"><SpotActions d={d} compact /></td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <Card title="Larval indices" subtitle="Weekly House Index and Breteau Index from field surveys">

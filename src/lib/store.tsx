@@ -3,7 +3,9 @@ import { DEFAULT_CONFIG, SOP, type EngineConfig } from '@shared/risk-engine';
 import { analyse, type Analytics } from './analytics';
 import { generateDemo } from './demo/generator';
 import { currentSession, isSupabaseConfigured, loadFromSupabase, myProfile, repo, sb } from './supabase';
-import type { Alert, BoroughCode, BreedingSite, CitizenReport, Db, DengueCase, FieldTask, LarvalSurvey, TaskStatus } from './types';
+import type { Alert, BoroughCode, BreedingSite, CitizenReport, Db, DengueCase, FieldTask, LarvalSurvey, TaskStatus, WaterDetection } from './types';
+import { aedesDevelopmentDays } from '@shared/risk-engine';
+import { addDays } from './util';
 import { safeStorage, todayIso, uid } from './util';
 
 export type Role = 'hq' | 'borough' | 'ward' | 'field' | 'councillor' | 'lab';
@@ -42,6 +44,10 @@ interface Ctx {
   runAlerting: () => Promise<number>;
   setCitizenStatus: (id: string, status: CitizenReport['status']) => Promise<void>;
   importCases: (rows: Omit<DengueCase, 'id'>[]) => Promise<number>;
+  addDetection: (d: Omit<WaterDetection, 'id'>) => Promise<string>;
+  setDetectionStatus: (id: string, status: WaterDetection['status']) => Promise<void>;
+  /** Confirms a water spot and assigns a 'Clear standing water' task due before its breeding window closes. */
+  dispatchDetection: (d: WaterDetection) => Promise<void>;
 }
 
 const C = createContext<Ctx | null>(null);
@@ -180,9 +186,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     mutate((d) => ({ ...d, citizen: d.citizen.map((x) => (x.id === id ? { ...x, status } : x)) }));
   };
 
+  const addDetection: Ctx['addDetection'] = async (d) => {
+    const row: WaterDetection = { ...d, id: uid('W') };
+    if (live) row.id = await repo.insertDetection(row);
+    mutate((x) => ({ ...x, detections: [row, ...x.detections] }));
+    return row.id;
+  };
+  const setDetectionStatus: Ctx['setDetectionStatus'] = async (id, status) => {
+    const clearedOn = status === 'Cleared' ? (db?.asOf ?? new Date().toISOString().slice(0, 10)) : undefined;
+    if (live) await repo.updateDetection(id, { status, clearedOn });
+    mutate((x) => ({ ...x, detections: x.detections.map((d) => (d.id === id ? { ...d, status, clearedOn: clearedOn ?? d.clearedOn, verifiedAt: d.verifiedAt ?? new Date().toISOString() } : d)) }));
+  };
+  const dispatchDetection: Ctx['dispatchDetection'] = async (d) => {
+    if (!db || !a) return;
+    const clearBy = addDays(d.waterSince, aedesDevelopmentDays(a.meanTempC) - 1);
+    const due = Math.max(Date.now() + 6 * 3600000, Date.parse(clearBy) + 12 * 3600000);
+    const task: FieldTask = {
+      id: uid('T'), ward: d.ward, type: 'Clear standing water', title: `Clear ${d.kind.toLowerCase()} (${d.source})`,
+      priority: Date.parse(clearBy) - Date.now() < 2 * 86400000 ? 'P1' : 'P2', status: 'Open', createdAt: new Date().toISOString(),
+      dueAt: new Date(due).toISOString(), source: 'Alert', team: db.teams[d.ward]?.[0] ?? `VCT-${d.ward}-A`, notes: `Water spot ${d.id} at ${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}`,
+    };
+    if (live) {
+      task.id = (await repo.insertTasks([task]))[0];
+      await repo.updateDetection(d.id, { status: 'Confirmed', taskId: task.id });
+    }
+    mutate((x) => ({
+      ...x,
+      tasks: [...x.tasks, task],
+      detections: x.detections.map((y) => (y.id === d.id ? { ...y, status: 'Confirmed', taskId: task.id, verifiedAt: y.verifiedAt ?? new Date().toISOString() } : y)),
+    }));
+  };
+
   const value: Ctx = {
     db, needsLogin, signIn, signOut, roleLocked: live0, a, error, scope, setScope, config, setConfig, toast, notify,
     addCase, addSurvey, addSite, addTask, setTaskStatus, setAlertStatus, actionAlert, runAlerting, setCitizenStatus, importCases,
+    addDetection, setDetectionStatus, dispatchDetection,
   };
   return <C.Provider value={value}>{children}</C.Provider>;
 }

@@ -6,9 +6,10 @@ import geo from '@/data/wards.geo.json';
 import type { Ward, WardStats } from '@/lib/types';
 import { RISK_COLOR } from './ui';
 
-export type MapMetric = 'risk' | 'cases' | 'bi' | 'forecast';
+export type MapMetric = 'risk' | 'water' | 'cases' | 'bi' | 'forecast';
 export const METRIC_LABEL: Record<MapMetric, string> = {
   risk: 'Risk score (next 2–4 weeks)',
+  water: 'Standing water (weighted spots per km²)',
   cases: 'Cases per 10,000 (last 2 weeks)',
   bi: 'Breteau Index (last 2 weeks)',
   forecast: 'Forecast cases (next 4 weeks)',
@@ -16,6 +17,7 @@ export const METRIC_LABEL: Record<MapMetric, string> = {
 
 const SEQ = ['#FFF4CC', '#FBD38D', '#F6995C', '#DD5B3A', '#A3243A'];
 const BREAKS: Record<Exclude<MapMetric, 'risk'>, number[]> = {
+  water: [0.01, 0.5, 1, 2, 4],
   cases: [0.01, 0.5, 1.5, 3, 6],
   bi: [0.01, 5, 10, 20, 35],
   forecast: [0.5, 2, 5, 10, 20],
@@ -24,6 +26,7 @@ export function metricValue(s: WardStats, m: MapMetric): number | null {
   if (m === 'risk') return s.risk.score;
   if (m === 'cases') return (s.last2w / Math.max(s.population, 1)) * 1e4;
   if (m === 'bi') return s.bi;
+  if (m === 'water') return s.water.index;
   return s.risk.forecast.reduce((a, f) => a + f.mean, 0);
 }
 export function metricColor(s: WardStats | undefined, m: MapMetric): string {
@@ -46,11 +49,11 @@ export function legendFor(m: MapMetric): { color: string; label: string }[] {
 function Fit({ bounds }: { bounds: LatLngBoundsExpression }) {
   const map = useMap();
   const key = JSON.stringify(bounds);
-  useEffect(() => { map.fitBounds(bounds, { padding: [12, 12] }); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { map.fitBounds(bounds, { padding: [12, 12], animate: false }); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
-export interface MapPoint { id: string; lat: number; lng: number; color: string; radius?: number; label: string }
+export interface MapPoint { id: string; lat: number; lng: number; color: string; radius?: number; label: string; ring?: boolean; onClick?: () => void }
 
 export function WardMap({
   stats, wards, metric, onSelect, highlight, points = [], circles = [], height = 460, focusWards,
@@ -96,7 +99,7 @@ export function WardMap({
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-slate-200" style={{ height }}>
-      <MapContainer ref={ref} bounds={bounds} zoomSnap={0.25} scrollWheelZoom={false} style={{ height: '100%', width: '100%', background: '#EEF2F1' }} attributionControl={false}>
+      <MapContainer ref={ref} bounds={bounds} zoomSnap={0.25} scrollWheelZoom={false} fadeAnimation={false} markerZoomAnimation={false} style={{ height: '100%', width: '100%', background: '#EEF2F1' }} attributionControl={false}>
         {tileUrl && <TileLayer url={tileUrl} opacity={0.5} />}
         <Fit bounds={bounds} />
         <GeoJSON
@@ -128,7 +131,9 @@ export function WardMap({
           </CircleMarker>
         ))}
         {points.map((p) => (
-          <CircleMarker key={p.id} center={[p.lat, p.lng]} radius={p.radius ?? 4} pathOptions={{ color: '#FFFFFF', weight: 1, fillColor: p.color, fillOpacity: 0.95 }}>
+          <CircleMarker key={p.id} center={[p.lat, p.lng]} radius={p.radius ?? 4}
+            pathOptions={p.ring ? { color: p.color, weight: 2.5, fillColor: '#FFFFFF', fillOpacity: 0.9 } : { color: '#FFFFFF', weight: 1, fillColor: p.color, fillOpacity: 0.95 }}
+            eventHandlers={p.onClick ? { click: p.onClick } : undefined}>
             <Tooltip>{p.label}</Tooltip>
           </CircleMarker>
         ))}
@@ -146,7 +151,7 @@ export function WardMap({
 }
 
 export function MetricToggle({ value, onChange }: { value: MapMetric; onChange: (m: MapMetric) => void }) {
-  const opts: [MapMetric, string][] = [['risk', 'Risk'], ['cases', 'Cases'], ['bi', 'Breteau'], ['forecast', 'Forecast']];
+  const opts: [MapMetric, string][] = [['risk', 'Risk'], ['water', 'Water'], ['cases', 'Cases'], ['bi', 'Breteau'], ['forecast', 'Forecast']];
   return (
     <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs" role="tablist" aria-label="Map layer">
       {opts.map(([k, l]) => (

@@ -1,0 +1,57 @@
+// AI vision for standing water. Three ways to reach the model, tried in this order:
+//   1. KMC deployment (Supabase configured): photo → Storage → analyze-image Edge Function → Anthropic API.
+//   2. Inside Claude (the published demo): Claude vision through the viewer's own Claude account.
+//   3. Neither: the feature is shown as unavailable.
+import { normalizeVision, visionPrompt, type ImageSource, type VisionResult } from '@shared/vision';
+import { isSupabaseConfigured, repo } from './supabase';
+
+declare global {
+  interface Window { claude?: { use: (name: string) => Promise<unknown> } }
+}
+type SampleFn = { json: (input: string, opts?: Record<string, unknown>) => Promise<unknown>; limits: () => Promise<{ images?: { maxCount: number; mediaTypes: string[] } }> };
+
+let samplePromise: Promise<SampleFn | null> | null = null;
+function getSample(): Promise<SampleFn | null> {
+  if (!window.claude?.use) return Promise.resolve(null);
+  samplePromise ??= (window.claude.use('sample') as Promise<SampleFn | null>).catch(() => null);
+  return samplePromise;
+}
+
+export type VisionChannel = 'server' | 'claude' | 'none';
+export async function visionChannel(): Promise<{ channel: VisionChannel; accept: string }> {
+  if (isSupabaseConfigured()) return { channel: 'server', accept: 'image/*' };
+  const s = await getSample();
+  if (!s) return { channel: 'none', accept: '' };
+  try {
+    const lim = await s.limits();
+    return lim?.images ? { channel: 'claude', accept: lim.images.mediaTypes.join(',') } : { channel: 'none', accept: '' };
+  } catch {
+    return { channel: 'none', accept: '' };
+  }
+}
+
+export interface VisionOutcome { result: VisionResult; model: string; photoPath?: string }
+
+export async function analyzeImage(file: File, source: ImageSource, ctx: { ward?: number; capturedOn?: string; note?: string }): Promise<VisionOutcome> {
+  if (isSupabaseConfigured()) {
+    const r = (await repo.analyzeImage(file, { source, ...ctx })) as { result?: unknown; model?: string; photoPath: string };
+    return { result: normalizeVision(r.result), model: String(r.model ?? 'server model'), photoPath: String(r.photoPath) };
+  }
+  const s = await getSample();
+  if (!s) throw { code: 'unavailable', message: 'AI vision is not available here' };
+  const raw = await s.json(visionPrompt(source, ctx), { images: [file], modelTier: 'default' });
+  return { result: normalizeVision(raw), model: 'Claude vision' };
+}
+
+export function visionError(e: unknown): string {
+  const code = (e as { code?: string })?.code;
+  switch (code) {
+    case 'not_granted': return 'AI analysis was not allowed. Allow it when asked to use this feature.';
+    case 'rate_limited': return 'Too many analyses just now. Try again in a minute.';
+    case 'image_rejected': return 'This file could not be read. Use a JPEG or PNG photo under 20 MB.';
+    case 'invalid_json': return 'The AI reply could not be read. Try again.';
+    case 'refused': return 'The AI declined this image. Try a different photo.';
+    case 'unavailable': case 'images_unavailable': case 'sampling_disabled': return 'AI vision is not available in this view.';
+    default: return (e as { message?: string })?.message ?? 'Analysis failed. Try again.';
+  }
+}

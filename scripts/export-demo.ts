@@ -26,6 +26,14 @@ out.push('insert into public.breeding_sites (ward_no, site_type, lat, lng, statu
 out.push(db.sites.map((s) => `(${s.ward}, ${q(s.type)}, ${s.lat}, ${s.lng}, ${q(s.status)}, ${q(s.detectedBy)}, ${q(s.firstSeen)}, ${q(s.lastActionOn ?? null)}, ${q(s.description)})`).join(',\n') + ';');
 out.push('insert into public.citizen_reports (ward_no, kind, text, status, reported_at) values');
 out.push(db.citizen.map((c) => `(${c.ward}, ${q(c.kind)}, ${q(c.text)}, ${q(c.status)}, ${q(c.reportedAt)})`).join(',\n') + ';');
+out.push('insert into public.ward_susceptibility (ward_no, susceptibility, method) values');
+out.push(Object.entries(db.susceptibility).map(([w, v]) => `(${w}, ${v.toFixed(3)}, 'synthetic demo')`).join(',\n') + '\non conflict (ward_no) do nothing;');
+out.push('insert into public.rain_daily (gauge, day, rain_mm, source) values');
+out.push(db.rainDaily.map((r) => `('City (synthetic)', ${q(r.date)}, ${r.mm}, 'synthetic')`).join(',\n') + '\non conflict do nothing;');
+out.push('insert into public.satellite_passes (sensor, platform, pass_date, cloud_pct, detections, status) values');
+out.push(db.passes.map((p) => `(${q(p.sensor)}, ${q(p.platform)}, ${q(p.date)}, ${q(p.cloudPct ?? null)}, ${p.detections}, ${q(p.status)})`).join(',\n') + '\non conflict do nothing;');
+out.push('insert into public.water_detections (ward_no, lat, lng, area_m2, source, sensor, kind, detected_at, water_since, confidence, status, aedes_risk, ai, verified_at, cleared_on) values');
+out.push(db.detections.map((d) => `(${d.ward}, ${d.lat}, ${d.lng}, ${q(d.areaM2 ?? null)}, ${q(d.source)}, ${q(d.sensor ?? null)}, ${q(d.kind)}, ${q(d.detectedAt)}, ${q(d.waterSince)}, ${d.confidence}, ${q(d.status)}, ${q(d.aedesRisk)}, ${d.ai ? q(JSON.stringify(d.ai)) + '::jsonb' : 'null'}, ${q(d.verifiedAt ?? null)}, ${q(d.clearedOn ?? null)})`).join(',\n') + ';');
 out.push('commit;');
 fs.writeFileSync('supabase/seed-demo.sql', out.join('\n') + '\n');
-console.log(`wrote supabase/seed-demo.sql: ${db.cases.length} cases, ${db.surveys.length} surveys, ${db.sites.length} sites`);
+console.log(`wrote supabase/seed-demo.sql: ${db.cases.length} cases, ${db.surveys.length} surveys, ${db.sites.length} sites, ${db.detections.length} water spots`);

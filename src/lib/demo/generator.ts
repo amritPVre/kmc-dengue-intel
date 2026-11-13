@@ -11,6 +11,8 @@ import type {
   LarvalSurvey, Severity, SiteType, TestType, Ward, WeatherWeek,
 } from '../types';
 import { addDays, binomial, gauss, mondayOf, mulberry32, pick, poisson, pointInGeom, type Rng } from '../util';
+import { generateWater } from './water';
+import type { RainDay } from '../types';
 
 type GeoFeature = { properties: { ward: number }; geometry: { type: string; coordinates: unknown } };
 const GEOMS = new Map<number, GeoFeature['geometry']>(
@@ -67,6 +69,25 @@ export function generateDemo(asOf: string, seed = 20261113): Db {
       rhPct: Math.round(Math.min(97, RH[mo] + gauss(rng) * 3)),
     };
   });
+  // synthetic recent rain events (a late-season low-pressure spell), added to the weekly totals
+  const EVENTS = [{ back: 9, mm: 64 }, { back: 3, mm: 21 }];
+  for (const e of EVENTS) {
+    const d = addDays(asOf, -e.back);
+    const wk = weather.find((w) => w.weekStart === mondayOf(d));
+    if (wk) wk.rainMm = +(wk.rainMm + e.mm).toFixed(1);
+  }
+  // daily rain for the last 120 days: weekly totals spread over the days, plus the events
+  const rainDaily: RainDay[] = [];
+  const wxByWeek = new Map(weather.map((w) => [w.weekStart, w]));
+  const eventMm = new Map(EVENTS.map((e) => [addDays(asOf, -e.back), e.mm]));
+  for (let back = 119; back >= 0; back--) {
+    const d = addDays(asOf, -back);
+    const wk = wxByWeek.get(mondayOf(d));
+    const weekBase = wk ? wk.rainMm - EVENTS.filter((e) => mondayOf(addDays(asOf, -e.back)) === wk.weekStart).reduce((x, e) => x + e.mm, 0) : 0;
+    const share = Math.exp(gauss(rng) * 0.9) / 7 / Math.exp(0.405); // mean-preserving lognormal share
+    rainDaily.push({ date: d, mm: +Math.max(0, weekBase * share + (eventMm.get(d) ?? 0)).toFixed(1) });
+  }
+
   // transmission suitability, driven by lagged rain and temperature
   const S = weeks.map((_, t) => {
     let lag = 0;
@@ -204,7 +225,15 @@ export function generateDemo(asOf: string, seed = 20261113): Db {
     };
   }).sort((a, b) => b.reportedAt.localeCompare(a.reportedAt));
 
-  const db: Db = { mode: 'demo', asOf, weeks, wards, weather, cases, surveys, sites, tasks: [], alerts: [], citizen, teams };
+  const lastWx = weather.filter((w) => w.weekStart < lastMonday).slice(-2);
+  const water = generateWater({
+    rng, asOf, wards, rainDaily, teams, pointIn: (w) => randomPointInWard(rng, w),
+    meanTempC: lastWx.reduce((x, w) => x + w.tMeanC, 0) / Math.max(1, lastWx.length),
+  });
+  const db: Db = {
+    mode: 'demo', asOf, weeks, wards, weather, cases, surveys, sites, tasks: [], alerts: [], citizen, teams,
+    detections: water.detections, passes: water.passes, rainDaily, susceptibility: water.susceptibility,
+  };
 
   // back-fill alerts and tasks for the last three complete weeks
   const thisMonday = lastMonday;
@@ -250,6 +279,6 @@ export function generateDemo(asOf: string, seed = 20261113): Db {
     }
   }
   db.alerts = alerts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  db.tasks = tasks;
+  db.tasks = [...tasks, ...water.tasks];
   return db;
 }

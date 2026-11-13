@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 // as static files anywhere, including sandboxed previews.
 export type Route =
   | { page: 'overview' } | { page: 'boroughs' } | { page: 'borough'; code: string } | { page: 'ward'; ward: number }
-  | { page: 'alerts' } | { page: 'field' } | { page: 'cases' } | { page: 'citizen' } | { page: 'sitrep' } | { page: 'settings' };
+  | { page: 'water' } | { page: 'alerts' } | { page: 'field' } | { page: 'cases' } | { page: 'citizen' } | { page: 'sitrep' } | { page: 'settings' };
 
 export function parseHash(h: string): Route {
   const s = h.replace(/^#/, '').toLowerCase();
@@ -13,7 +13,7 @@ export function parseHash(h: string): Route {
   const w = s.match(/^ward-(\d{1,3})$/);
   if (w) return { page: 'ward', ward: Number(w[1]) };
   if (s === 'config') return { page: 'settings' }; // '#settings' is reserved by some hosts
-  const simple = ['overview', 'boroughs', 'alerts', 'field', 'cases', 'citizen', 'sitrep'] as const;
+  const simple = ['overview', 'water', 'boroughs', 'alerts', 'field', 'cases', 'citizen', 'sitrep'] as const;
   if ((simple as readonly string[]).includes(s)) return { page: s as (typeof simple)[number] } as Route;
   return { page: 'overview' };
 }
@@ -23,6 +23,7 @@ export const href = {
   boroughs: '#boroughs',
   borough: (code: string) => `#borough-${code.toLowerCase()}`,
   ward: (n: number) => `#ward-${n}`,
+  water: '#water',
   alerts: '#alerts',
   field: '#field',
   cases: '#cases',

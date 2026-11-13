@@ -10,7 +10,7 @@ import { Button, Card, Empty, Pill, inputCls } from '@/components/ui';
 import { ALERT_TONE } from './Overview';
 
 const TYPE_LABEL: Record<Alert['type'], string> = {
-  cluster: 'Case cluster', exceedance: 'Cases above expected', entomological: 'Larval density', predicted: 'Predicted risk',
+  cluster: 'Case cluster', exceedance: 'Cases above expected', entomological: 'Larval density', predicted: 'Predicted risk', water: 'Standing water',
 };
 
 export function Alerts() {

@@ -1,15 +1,38 @@
 # KMC Dengue Intelligence — MVP
 
-AI-assisted dengue prevention, early detection and outbreak management for the **Kolkata Municipal Corporation (KMC)**: 16 boroughs, 144 wards today, ready for the 209-ward delimitation.
+AI-assisted dengue **prevention** for the **Kolkata Municipal Corporation (KMC)**: 16 boroughs, 144 wards today, ready for the 209-ward delimitation.
 
-One platform for KMC HQ, borough health officers, ward health officers, field vector-control teams, labs and councillors. It brings case reports, larval surveys, breeding sites, weather and field action into a single ward-level risk picture, forecasts risk 2–4 weeks ahead, raises alerts, and tracks the response until it is verified.
+The core of the platform is **finding standing water, ward by ward, and getting it cleared before mosquitoes emerge**. AI reads satellite radar and optical passes, KMC drone imagery, field-team and citizen photos and rain-gauge data to flag water spots; ward teams verify them and clear them inside the breeding window (egg to adult takes about 7 days at 30 °C, 10 at 25 °C). Case surveillance, larval surveys, risk forecasting and field-task tracking sit around that core.
 
 > **Demo mode.** With no Supabase keys the app runs entirely in the browser on a **synthetic** dataset shaped like Kolkata's monsoon-driven dengue season. None of it is real KMC data.
+
+## Standing-water detection (the prevention core)
+
+| Source | What it finds | Resolution / frequency | Access | State in this MVP |
+| --- | --- | --- | --- | --- |
+| KMC drone surveys | Rooftop water, uncovered overhead tanks, tyres, construction-site water | Centimetres; per mission | KMC already flies drones for rooftop surveillance | AI per frame (vision model); `pipelines/drone/` tiles an orthomosaic and sends tiles to the same AI |
+| Field-team photos | Containers, drains, premises | Per photo, with GPS | KMC vector-control staff phones | AI photo analysis built in |
+| Citizen photos | Complaints with pictures | Per photo | WhatsApp / app intake (Phase 2) | Same AI analysis |
+| Sentinel-1C/1D radar | Open waterlogging, flooded plots, construction pits ≥ 300 m² | 10 m, 6-day revisit, through cloud | Free (Copernicus) | `pipelines/satellite/` (Earth Engine) written, not yet run on live imagery |
+| Sentinel-2 optical | Pools, ponds, waterlogged land | 10 m, 5-day, cloud-limited | Free (Copernicus) | Same pipeline |
+| NISAR L-band radar | Water under vegetation | 12-day repeat | Free (NASA-ISRO) | Phase 2 (scene search stub) |
+| KMC rain gauges + flood sensors (FFEWS) | Locality rainfall; streets under water | Real time | KMC Drainage & Sewerage control room | `rain_daily` table + `rain-watch` function; needs the KMC feed |
+| Rain + terrain model | Pockets that usually pool after heavy rain | Same day as the rain | Built from past monsoon radar passes + elevation | Built; demo uses synthetic susceptibility |
+| CCTV (KMC / Kolkata Police) | Street waterlogging at junctions | Frames | Integrated control room | Phase 2 |
+
+How a spot moves through the system: **detected** (AI, with confidence and source) → **checked** by the ward team (Confirm / False alarm) → **dispatched** as a "Clear standing water" task due before its clear-by date → **cleared**. Spots past the window trigger a water alert with adult-mosquito control. Each confirm / false-alarm decision is a labelled example for retraining the detectors on Kolkata's own rooftops and lanes, and the page shows each source's confirmation rate.
+
+Standing water also feeds the ward risk score (a new "standing water" factor), so wet wards rise in the forecast before cases do.
+
+The AI photo analysis uses one prompt and result format everywhere (`supabase/functions/_shared/vision.ts`):
+- **KMC deployment**: photo → Supabase Storage → `analyze-image` Edge Function → Anthropic API (set `ANTHROPIC_API_KEY`).
+- **Inside Claude** (the published demo): the page asks Claude vision through the viewer's own Claude account.
 
 ## What it does
 
 | Area | What users get |
 | --- | --- |
+| Standing water | Live rain and satellite status, active spots with clear-by countdown, map layer, AI photo analysis, verify / dispatch / clear, confirmation rate per source |
 | City overview (HQ) | Weekly cases vs last year with rainfall, high-risk wards, active alerts, overdue tasks, city Breteau Index, ward choropleth (risk, cases, Breteau, forecast), borough ranking |
 | Borough view | Borough KPIs, ward map and sortable ward ranking, borough epi curve, open alerts, task on-time rate |
 | Ward view | Risk score with an explanation of its drivers, 4-week forecast with a 90% band, larval index trend, case and breeding-site map with cluster rings, playbook actions, tasks, anonymised case line list |
@@ -63,7 +86,7 @@ npm run build        # static build in dist/ (relative paths, hash routing)
 2. Apply the migrations in `supabase/migrations/` in order (`supabase db push`, or paste them in the SQL editor).
 3. Load geography: run `supabase/seed.sql` (16 boroughs, 144 wards, adjacency, two teams per ward).
    Optional for a demo project only: `supabase/seed-demo.sql` (synthetic history). Never load it next to real data.
-4. Deploy the functions: `supabase functions deploy compute-risk` and `supabase functions deploy fetch-weather`, then enable `pg_cron` + `pg_net` and schedule them (see `migrations/…_schedule.sql`).
+4. Deploy the functions: `compute-risk`, `fetch-weather`, `analyze-image` (secret `ANTHROPIC_API_KEY`) and `rain-watch`; create the private Storage bucket `detection-photos`; enable `pg_cron` + `pg_net` and schedule them (see `migrations/…_schedule.sql`).
 5. Create users in Supabase Auth and add a row per user in `public.profiles` (role, borough or ward).
 6. Copy `.env.example` to `.env`, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, and build.
 
@@ -108,14 +131,16 @@ Open-Meteo / IMD ───┘   Storage, Edge Fns)  ──┤── Alerts & pla
 - Ward boundaries: 141 from DataMeet open data (simplified); wards 142–144 are approximate points. Replace with KMC's official GIS.
 - Ward populations are placeholders (31,000 per ward in the seed); load census or KMC figures.
 - Field app works online only; offline capture and a Bengali interface are next.
-- Not yet integrated with IDSP-IHIP, private-lab systems, KMC drones or a WhatsApp citizen bot (designed for, see roadmap).
+- The satellite pipeline is written against Google Earth Engine but has not been run on live imagery here; validate it on the 22–23 September 2025 cloudburst before use. Radar is less reliable in dense built-up areas, so those detections carry lower confidence and always need a ward check.
+- Drone detection uses a general vision model per tile until a YOLO detector is trained on KMC-labelled tiles (Phase 2).
+- Not yet integrated with IDSP-IHIP, private-lab systems, the KMC FFEWS feed or a WhatsApp citizen bot (designed for, see roadmap).
 
 ## Roadmap
 
 | Phase | Scope |
 | --- | --- |
 | 0 — Demo (now) | This MVP on synthetic data |
-| 1 — Pilot, 2 boroughs, Jan–Apr 2027 | Load KMC history; train and validate the model; onboard 2 boroughs' ward teams and 10+ labs; Bengali UI; offline field capture |
+| 1 — Pilot, 2 boroughs, Jan–Apr 2027 | Connect KMC drone imagery and FFEWS rain gauges; run and validate the satellite pipeline; build the waterlogging susceptibility map from past monsoons; load KMC case history and train the risk model; Bengali UI; offline field capture |
 | 2 — Pre-monsoon city rollout, May–Jun 2027 | All 16 boroughs; switch to the 209-ward map; IHIP and private-lab feeds; WhatsApp citizen intake |
 | 3 — Season operations, Jul–Nov 2027 | Weekly model monitoring; drone-image breeding-site detection; hospital bed and platelet visibility |
 

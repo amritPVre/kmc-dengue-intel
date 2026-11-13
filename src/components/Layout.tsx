@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, Bell, ClipboardList, FileText, LayoutDashboard, Map, Megaphone, Menu, Settings, Stethoscope, X } from 'lucide-react';
+import { AlertTriangle, Bell, ClipboardList, Droplets, FileText, LayoutDashboard, Map, Megaphone, Menu, Settings, Stethoscope, X } from 'lucide-react';
 import { ROLE_LABEL, useData, type Role } from '@/lib/store';
 import { href, type Route } from '@/lib/router';
 import { BOROUGHS, type BoroughCode } from '@/lib/types';
@@ -9,6 +9,7 @@ import { inputCls } from './ui';
 interface NavItem { key: Route['page']; label: string; href: string; icon: ReactNode; roles: Role[] }
 const NAV: NavItem[] = [
   { key: 'overview', label: 'City overview', href: href.overview, icon: <LayoutDashboard size={18} />, roles: ['hq'] },
+  { key: 'water', label: 'Standing water', href: href.water, icon: <Droplets size={18} />, roles: ['hq', 'borough', 'ward', 'field', 'councillor'] },
   { key: 'boroughs', label: 'Boroughs', href: href.boroughs, icon: <Map size={18} />, roles: ['hq', 'borough'] },
   { key: 'alerts', label: 'Alerts', href: href.alerts, icon: <Bell size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
   { key: 'field', label: 'Field operations', href: href.field, icon: <ClipboardList size={18} />, roles: ['hq', 'borough', 'ward', 'field'] },

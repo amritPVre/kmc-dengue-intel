@@ -7,6 +7,9 @@ import { href } from '@/lib/router';
 import { PageHeader } from '@/components/Layout';
 import { Button, Card, Empty, Pill, inputCls } from '@/components/ui';
 import { SiteForm, SurveyForm, TaskForm } from './forms';
+import { daysLeft, isActiveWater } from '@/lib/analytics';
+import { addDays } from '@/lib/util';
+import { ClearBy, SpotActions } from './Water';
 
 const STATUSES: TaskStatus[] = ['Open', 'In progress', 'Done', 'Verified'];
 const NEXT: Partial<Record<TaskStatus, { to: TaskStatus; label: string; icon: JSX.Element }>> = {
@@ -51,7 +54,7 @@ export function TaskList({ tasks, compact }: { tasks: FieldTask[]; compact?: boo
 }
 
 export function FieldOps() {
-  const { db, scope } = useData();
+  const { db, a, scope } = useData();
   const wards = useScopedWards();
   const [ward, setWard] = useState<number | 'all'>(scope.role === 'hq' || scope.role === 'borough' ? 'all' : scope.ward);
   const [overdueOnly, setOverdueOnly] = useState(false);
@@ -92,6 +95,25 @@ export function FieldOps() {
       )}
       {field ? (
         <div className="space-y-4">
+          {a && (() => {
+            const spots = db.detections.filter((d) => d.ward === scope.ward && isActiveWater(d) && d.waterSince >= addDays(db.asOf, -30))
+              .sort((x, y) => daysLeft(x, db.asOf, a.meanTempC) - daysLeft(y, db.asOf, a.meanTempC));
+            return (
+              <Card title={`Water spots to check and clear (${spots.length})`} subtitle="Found by satellite, drone, photos or the rain model. Confirm what is real, clear it, and mark it cleared.">
+                {spots.length === 0 ? <Empty>No water spots in your ward right now.</Empty> : (
+                  <div className="space-y-2">
+                    {spots.map((d) => (
+                      <div key={d.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-2"><ClearBy left={daysLeft(d, db.asOf, a.meanTempC)} /><b>{d.kind}</b><span className="text-xs text-slate-500">{d.source}</span></div>
+                        <p className="mt-1 text-xs text-slate-600">{d.ai?.recommendedAction ?? 'Inspect, drain or empty the water, and larvicide what cannot be removed.'} · {d.lat.toFixed(5)}, {d.lng.toFixed(5)}</p>
+                        <div className="mt-2"><SpotActions d={d} compact /></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
           {(['In progress', 'Open'] as TaskStatus[]).map((s) => (
             <Card key={s} title={s === 'Open' ? 'To do' : 'In progress'}><TaskList tasks={tasks.filter((t) => t.status === s)} compact /></Card>
           ))}

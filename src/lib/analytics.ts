@@ -1,8 +1,8 @@
 import {
-  DEFAULT_CONFIG, clusters, entomological, exceedance, predicted, scoreWard,
+  DEFAULT_CONFIG, aedesDevelopmentDays, clusters, daysToClear, entomological, exceedance, predicted, scoreWard, waterSignal,
   type CasePoint, type EngineConfig, type Signal,
 } from '@shared/risk-engine';
-import type { BoroughCode, Db, WardStats } from './types';
+import type { BoroughCode, Db, WardStats, WardWater, WaterDetection } from './types';
 import { BOROUGHS } from './types';
 import { addDays, daysBetween, mondayOf, parseIso } from './util';
 
@@ -16,7 +16,14 @@ export interface Analytics {
   boroughWeekly: Map<BoroughCode, number[]>;
   rainWeekly: number[];
   config: EngineConfig;
+  /** Mean temperature over the last 2 weeks and the resulting egg-to-adult time for Aedes. */
+  meanTempC: number;
+  devDays: number;
 }
+
+export const isActiveWater = (d: WaterDetection) => d.status === 'New' || d.status === 'Confirmed';
+/** Days left before water at this spot can produce adult mosquitoes (negative = window passed). */
+export const daysLeft = (d: WaterDetection, today: string, meanTempC: number) => daysToClear(d.waterSince, today, meanTempC);
 
 export interface AnalyseOptions {
   /** Analyse as if the latest complete week were completeWeeks[endIndex] (used to back-fill history). */
@@ -91,6 +98,22 @@ export function analyse(db: Db, opts: AnalyseOptions = {}): Analytics {
     if (new Date(t.dueAt).getTime() < nowMs) overdueTasks.set(t.ward, (overdueTasks.get(t.ward) ?? 0) + 1);
   }
 
+  // standing water: active hotspots per ward, weighted by confidence (confirmed = 1)
+  const today = isBacktest ? addDays(horizonEnd, -1) : db.asOf;
+  const water = new Map<number, WardWater>();
+  for (const w of db.wards) water.set(w.ward, { active: 0, urgent: 0, pastWindow: 0, index: 0 });
+  const areaByWard = new Map(db.wards.map((w) => [w.ward, w.areaKm2]));
+  for (const d of db.detections ?? []) {
+    if (!isActiveWater(d) || d.detectedAt.slice(0, 10) > today || d.waterSince < addDays(today, -30)) continue;
+    const acc = water.get(d.ward);
+    if (!acc) continue;
+    const left = daysToClear(d.waterSince, today, meanT);
+    acc.active++;
+    if (left >= 0 && left <= 2) acc.urgent++;
+    if (left < 0) acc.pastWindow++;
+    acc.index += (d.status === 'Confirmed' ? 1 : d.confidence) / Math.max(areaByWard.get(d.ward) ?? 1, 0.5);
+  }
+
   const popByWard = new Map(db.wards.map((w) => [w.ward, w.population]));
   const ytdStart = `${db.asOf.slice(0, 4)}-01-01`;
   const stats = new Map<number, WardStats>();
@@ -119,6 +142,7 @@ export function analyse(db: Db, opts: AnalyseOptions = {}): Analytics {
       meanTempC: meanT,
       meanRhPct: meanRh,
       historicalPercentile: pct.get(w.ward) ?? 0.5,
+      standingWaterIndex: water.get(w.ward)!.index,
     }, cfg);
     const ytd = completeWeeks.reduce((a, wk, i) => a + (wk >= mondayOf(ytdStart) ? series[i] : 0), 0) + (currentWeekCases.get(w.ward) ?? 0);
     stats.set(w.ward, {
@@ -128,11 +152,14 @@ export function analyse(db: Db, opts: AnalyseOptions = {}): Analytics {
       openSites: sitesOpen.get(w.ward) ?? 0,
       openTasks: openTasks.get(w.ward) ?? 0,
       overdueTasks: overdueTasks.get(w.ward) ?? 0,
+      water: water.get(w.ward)!,
       risk,
     });
     const ex = exceedance(w.ward, series, cfg); if (ex) signals.push(ex);
     const en = entomological(w.ward, idx ? idx.BI : null, idx ? idx.HI : null, cfg); if (en) signals.push(en);
     const pr = predicted(risk, cfg); if (pr) signals.push(pr);
+    const wa = water.get(w.ward)!;
+    const ws = waterSignal(w.ward, wa.urgent, wa.pastWindow, cfg); if (ws) signals.push(ws);
   }
   signals.push(...clusters(points, todayIndex, cfg));
 
@@ -142,7 +169,7 @@ export function analyse(db: Db, opts: AnalyseOptions = {}): Analytics {
     const bw = boroughWeekly.get(s.borough)!;
     s.weekly.forEach((v, i) => { cityWeekly[i] += v; bw[i] += v; });
   }
-  return { completeWeeks, currentWeek, stats, currentWeekCases, signals, cityWeekly, boroughWeekly, rainWeekly, config: cfg };
+  return { completeWeeks, currentWeek, stats, currentWeekCases, signals, cityWeekly, boroughWeekly, rainWeekly, config: cfg, meanTempC: meanT, devDays: aedesDevelopmentDays(meanT) };
 }
 
 export function boroughSummary(a: Analytics, b: BoroughCode) {
@@ -162,6 +189,9 @@ export function boroughSummary(a: Analytics, b: BoroughCode) {
     openSites: sum((s) => s.openSites),
     openTasks: sum((s) => s.openTasks),
     overdueTasks: sum((s) => s.overdueTasks),
+    waterActive: sum((s) => s.water.active),
+    waterUrgent: sum((s) => s.water.urgent),
+    waterPast: sum((s) => s.water.pastWindow),
     weekly: a.boroughWeekly.get(b)!,
   };
 }

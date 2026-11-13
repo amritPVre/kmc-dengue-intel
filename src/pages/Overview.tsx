@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import { Droplets } from 'lucide-react';
+import { daysLeft, isActiveWater } from '@/lib/analytics';
+import { addDays } from '@/lib/util';
 import { useData } from '@/lib/store';
 import { boroughSummary, LEVEL_ORDER } from '@/lib/analytics';
 import { BOROUGHS } from '@/lib/types';
@@ -31,6 +34,7 @@ export function Overview() {
       overdue: stats.reduce((x, s) => x + s.overdueTasks, 0),
       openTasks: stats.reduce((x, s) => x + s.openTasks, 0),
       cityBi: withBi.length ? withBi.reduce((x, s) => x + (s.bi ?? 0), 0) / withBi.length : null,
+      waterActive: db.detections.filter((d) => isActiveWater(d) && d.waterSince >= addDays(db.asOf, -30)),
       boroughs: BOROUGHS.map((b) => boroughSummary(a, b)).sort((x, y) => y.maxRisk - x.maxRisk || y.last2w - x.last2w),
       top: stats.sort((x, y) => y.risk.score - x.risk.score).slice(0, 10),
     };
@@ -41,6 +45,14 @@ export function Overview() {
   return (
     <>
       <PageHeader title="City overview" subtitle={`Latest complete week: ${fmtWeek(lastWeekStart)} · risk outlook for the next 2–4 weeks`} />
+      <a href={href.water} className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm hover:border-sky-400">
+        <span className="flex items-center gap-2 font-semibold text-sky-900"><Droplets size={18} /> Prevention: standing water</span>
+        <span><b className="tabular-nums">{data.waterActive.length}</b> active spots</span>
+        <span className="text-red-700"><b className="tabular-nums">{data.waterActive.filter((d) => { const l = daysLeft(d, db.asOf, a.meanTempC); return l >= 0 && l <= 2; }).length}</b> to clear within 2 days</span>
+        <span className="text-red-900"><b className="tabular-nums">{data.waterActive.filter((d) => daysLeft(d, db.asOf, a.meanTempC) < 0).length}</b> past the breeding window</span>
+        <span className="text-slate-600">{data.waterActive.filter((d) => d.status === 'New').length} AI detections waiting to be checked</span>
+        <span className="ml-auto font-medium text-kmc-700">Open →</span>
+      </a>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Cases last week" value={fmtInt(data.lastWeek)} sub={<Trend now={data.lastWeek} before={data.prevWeek} />} />
         <Kpi label="This week so far" value={fmtInt(data.thisWeek)} sub="Reports received since Monday" />

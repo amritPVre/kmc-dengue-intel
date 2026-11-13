@@ -55,9 +55,11 @@ export function Settings() {
               ['Private labs and hospitals', 'Daily line lists (CSV / API)', 'Planned'],
               ['IDSP-IHIP', 'National surveillance exchange', 'Planned'],
               ['Weather (IMD / open data)', 'Rainfall, temperature, humidity', db.mode === 'supabase' ? 'Live' : 'Demo'],
-              ['KMC drone surveys', 'Rooftop and inaccessible-site images', 'Planned'],
+              ['KMC drone surveys', 'Rooftop water, tanks, tyres (AI on every frame)', 'Built'],
+              ['Sentinel-1C/1D and Sentinel-2', 'Open waterlogging and pooling (Earth Engine pipeline)', 'Pipeline written'],
+              ['KMC rain gauges and flood sensors (FFEWS)', 'Rainfall by locality, streets under water', 'Needs KMC feed'],
               ['Citizen channels (WhatsApp, app, helpline)', 'Complaints and fever reports', 'Planned'],
-            ].map(([a, b, c]) => <tr key={a}><td className="px-2 py-1.5">{a}</td><td className="px-2 py-1.5">{b}</td><td className="px-2 py-1.5"><Pill tone={c === 'Live' ? 'green' : c === 'Demo' ? 'blue' : 'slate'}>{c}</Pill></td></tr>)}
+            ].map(([a, b, c]) => <tr key={a}><td className="px-2 py-1.5">{a}</td><td className="px-2 py-1.5">{b}</td><td className="px-2 py-1.5"><Pill tone={c === 'Live' || c === 'Built' ? 'green' : c === 'Demo' || c === 'Pipeline written' ? 'blue' : c === 'Needs KMC feed' ? 'amber' : 'slate'}>{c}</Pill></td></tr>)}
           </Table>
         </Card>
         <Card className="xl:col-span-2" title="Data protection">

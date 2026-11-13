@@ -11,6 +11,7 @@ import { CaseReport } from './pages/CaseReport';
 import { Citizen } from './pages/Citizen';
 import { SitRep } from './pages/SitRep';
 import { Settings } from './pages/Settings';
+import { Water } from './pages/Water';
 
 function Login() {
   const { signIn } = useData();
@@ -53,7 +54,7 @@ function Pages() {
       (scope.role === 'borough' && r.page === 'ward' && wardOf(r.ward)?.borough !== scope.borough) ||
       ((scope.role === 'ward' || scope.role === 'councillor' || scope.role === 'field') && r.page === 'ward' && r.ward !== scope.ward) ||
       ((scope.role === 'ward' || scope.role === 'councillor' || scope.role === 'field') && r.page === 'boroughs') ||
-      (scope.role === 'field' && !['field', 'ward'].includes(r.page)) ||
+      (scope.role === 'field' && !['field', 'ward', 'water'].includes(r.page)) ||
       (scope.role === 'lab' && r.page !== 'cases') ||
       (scope.role === 'councillor' && ['field', 'cases', 'citizen'].includes(r.page));
     if (blocked) window.location.hash = home;
@@ -71,6 +72,7 @@ function Pages() {
   let page;
   switch (route.page) {
     case 'overview': page = <Overview />; break;
+    case 'water': page = <Water />; break;
     case 'boroughs': page = <Boroughs />; break;
     case 'borough': page = <BoroughDetail code={route.code} />; break;
     case 'ward': page = <WardDetail key={route.ward} ward={route.ward} />; break;

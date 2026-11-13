@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { Copy, Printer } from 'lucide-react';
 import { useData, useScopedWards } from '@/lib/store';
-import { boroughSummary, LEVEL_ORDER } from '@/lib/analytics';
+import { boroughSummary, daysLeft, isActiveWater, LEVEL_ORDER } from '@/lib/analytics';
 import { BOROUGHS } from '@/lib/types';
-import { fmt1, fmtDate, fmtWeek } from '@/lib/util';
+import { addDays, fmt1, fmtDate, fmtWeek } from '@/lib/util';
 import { PageHeader } from '@/components/Layout';
 import { Button, Card, RiskBadge, Table } from '@/components/ui';
 
@@ -28,17 +28,22 @@ export function SitRep() {
     const scopeName = scope.role === 'hq' ? 'Kolkata Municipal Corporation (all 16 boroughs)' : scope.role === 'borough' ? `Borough ${scope.borough}` : `Ward ${scope.ward}`;
     const boroughRows = scope.role === 'hq' ? BOROUGHS.map((b) => boroughSummary(a, b)) : [];
     const change = prevWeek ? Math.round(((lastWeek - prevWeek) / prevWeek) * 100) : 0;
+    const water = db.detections.filter((d) => set.has(d.ward) && isActiveWater(d) && d.waterSince >= addDays(db.asOf, -30));
+    const wUrgent = water.filter((d) => { const l = daysLeft(d, db.asOf, a.meanTempC); return l >= 0 && l <= 2; }).length;
+    const wPast = water.filter((d) => daysLeft(d, db.asOf, a.meanTempC) < 0).length;
     const text = [
       `DENGUE SITUATION REPORT — ${scopeName}`,
       `Prepared ${fmtDate(db.asOf)} · reporting week ${fmtWeek(week)}${db.mode === 'demo' ? ' · DEMO DATA (synthetic)' : ''}`,
       '',
-      `1. Cases: ${lastWeek} confirmed last week (${prevWeek} the week before, ${change >= 0 ? '+' : ''}${change}%). ${ytd} so far this year.`,
-      `2. Risk outlook (2–4 weeks): ${high.length} ward(s) at high or very high risk${high.length ? ': ' + high.slice(0, 10).map((s) => `${s.ward} (${s.risk.score})`).join(', ') : ''}.`,
-      `3. Alerts open: ${alerts.length} — ${['cluster', 'exceedance', 'entomological', 'predicted'].map((t) => `${alerts.filter((x) => x.type === t).length} ${t}`).join(', ')}.`,
-      `4. Field response: ${open.length} tasks open, ${overdue.length} overdue.`,
-      `5. Larval surveillance: mean Breteau Index ${fmt1(stats.filter((s) => s.bi != null).reduce((x, s) => x + (s.bi ?? 0), 0) / Math.max(1, stats.filter((s) => s.bi != null).length))}; ${stats.filter((s) => (s.bi ?? 0) >= a.config.alerts.breteauHigh).length} ward(s) at or above BI ${a.config.alerts.breteauHigh}.`,
+      `1. Standing water: ${water.length} active spot(s) — ${wUrgent} to clear within 2 days, ${wPast} past the breeding window (Aedes egg to adult ≈ ${a.devDays} days at ${a.meanTempC.toFixed(1)} °C); ${water.filter((d) => d.status === 'New').length} AI detection(s) not yet checked.`,
+      `2. Cases: ${lastWeek} confirmed last week (${prevWeek} the week before, ${change >= 0 ? '+' : ''}${change}%). ${ytd} so far this year.`,
+      `3. Risk outlook (2–4 weeks): ${high.length} ward(s) at high or very high risk${high.length ? ': ' + high.slice(0, 10).map((s) => `${s.ward} (${s.risk.score})`).join(', ') : ''}.`,
+      `4. Alerts open: ${alerts.length} — ${['water', 'cluster', 'exceedance', 'entomological', 'predicted'].map((t) => `${alerts.filter((x) => x.type === t).length} ${t}`).join(', ')}.`,
+      `5. Field response: ${open.length} tasks open, ${overdue.length} overdue.`,
+      `6. Larval surveillance: mean Breteau Index ${fmt1(stats.filter((s) => s.bi != null).reduce((x, s) => x + (s.bi ?? 0), 0) / Math.max(1, stats.filter((s) => s.bi != null).length))}; ${stats.filter((s) => (s.bi ?? 0) >= a.config.alerts.breteauHigh).length} ward(s) at or above BI ${a.config.alerts.breteauHigh}.`,
       '',
       'Priority actions for this week:',
+      ...(wUrgent + wPast ? [`- Clear ${wUrgent + wPast} standing-water spot(s) now; larvicide what cannot be drained.`] : []),
       ...(high.length ? high.slice(0, 5).map((s) => `- Ward ${s.ward}: ${s.risk.drivers.slice(0, 2).map((d) => d.label.toLowerCase()).join('; ')}`) : ['- Continue routine weekly surveillance.']),
       ...(overdue.length ? [`- Clear ${overdue.length} overdue field task(s).`] : []),
     ].join('\n');
