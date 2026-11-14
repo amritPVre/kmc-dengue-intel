@@ -231,9 +231,9 @@ export function Water() {
 
       <div className="mt-4 grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3" title="Where the water is" subtitle="Dots: active spots (dark red past window, red ≤ 2 days, amber ≤ 5, green later; ringed = not yet checked). Click a dot for its ward."
-          action={<MetricToggle value={metric} onChange={setMetric} />}>
+          action={<MetricToggle value={metric} onChange={setMetric} noCases={a.noCases} />}>
           <WardMap stats={a.stats} wards={wards.length < 20 ? db.wards.filter((w) => wardSet.has(w.ward) || wards.some((x) => x.neighbours.includes(w.ward))) : db.wards} focusWards={[...wardSet]}
-            metric={metric} points={points} onSelect={(w) => go(href.ward(w))} height={480} />
+            metric={metric} noCases={a.noCases} points={points} onSelect={(w) => go(href.ward(w))} height={480} />
         </Card>
         <div className="space-y-4 xl:col-span-2">
           <Card title="How well each source works" subtitle="Share of checked detections that were real water">

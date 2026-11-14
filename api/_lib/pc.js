@@ -81,7 +81,7 @@ export async function polygonStats(collection, item, params, features, { batch =
           errors.push(String(e2.message || e2).slice(0, 160));
         }
       });
-      if (!errors.length) errors.push(String(e.message || e).slice(0, 160));
+      // The batch error is not recorded when every ward succeeded on its own retry.
     }
   });
   return { stats: result, errors: errors.slice(0, 5) };
