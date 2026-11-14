@@ -97,7 +97,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
             {roleLocked ? (
               <button onClick={signOut} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50">Sign out</button>
             ) : (
-              <select aria-label="Role" className={`${inputCls} w-auto max-w-[11rem] py-1.5 text-xs sm:max-w-none`} value={scope.role} onChange={(e) => changeRole(e.target.value as Role)}>
+              <select aria-label="Role" className={`${inputCls} w-auto max-w-[13rem] py-1.5 text-xs`} value={scope.role} onChange={(e) => changeRole(e.target.value as Role)}>
                 {(Object.keys(ROLE_LABEL) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
               </select>
             )}

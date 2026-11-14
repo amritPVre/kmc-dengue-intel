@@ -6,6 +6,42 @@ The core of the platform is **finding standing water, ward by ward, and getting 
 
 > **Demo mode.** With no Supabase keys the app runs entirely in the browser on a **synthetic** dataset shaped like Kolkata's monsoon-driven dengue season. None of it is real KMC data.
 
+## Live open data (no KMC data needed to start)
+
+The app runs on real, public data from day one. Server functions in `api/` (Vercel) fetch and process it;
+results are stored in Supabase (`public_layers`) and refreshed by a daily cron.
+
+| Layer | Source | How it is used |
+|---|---|---|
+| Rain, temperature, humidity per borough, May 2025 → 16-day forecast | Open-Meteo (forecast models + ERA5) | Rain trigger, breeding-window countdown, season factor |
+| New water per ward and 250 m water spots, every Sentinel-1 pass | Copernicus Sentinel-1 RTC on Microsoft Planetary Computer | Each pass minus a dry-season pass of the same orbit (VV < −16 dB) |
+| True-colour views | Sentinel-2 L2A (Planetary Computer) | Visual checks on clear days |
+| Built-up, bare/vacant, grass, water per ward | ESA WorldCover 2021 | Vacant-land driver |
+| Seasonal and permanent surface water | JRC Global Surface Water | Chronic-pooling driver |
+| Tyre/repair shops, scrap yards, construction sites, markets, nurseries, ponds, drains, hospitals, schools | OpenStreetMap (Overpass) | Sites to inspect; container-site driver |
+| Ward population (141 wards) | Census 2011 PCA (via Wikipedia ward articles) | Density driver |
+| Waterlogging pockets, dengue hotspot wards 2022–2025, KMC gauge readings | KMC statements and press (cited in `src/data/`) | Rain trigger; evidence check |
+
+**Prevention index** (`supabase/functions/_shared/prevention.ts`): breeding pressure per ward from the
+layers above, never from case data, so it can be checked against case records it has not seen
+(Evidence page: ROC AUC against wards named in public reports). Weights are an expert baseline until
+fitted on KMC's ward-level history.
+
+**Replay**: any date since June 2025 can be viewed as the data stood then (forecasts are not used).
+**Outbreak drill**: simulated cases for training, clearly bannered and kept apart from live data.
+
+What still needs KMC: ward-level case records, larval surveys, drone footage, FFEWS rain gauges and
+sensors. Each has an import path or connector ready.
+
+### Deploy (Vercel + Supabase free tiers)
+
+1. Supabase: apply `supabase/migrations/*` (not `seed-demo.sql`), then `supabase/seed.sql`; set the layer
+   write token: `insert into private.app_secrets values ('layer_write_token', '<random>')`.
+2. Vercel env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+   `LAYER_WRITE_TOKEN` (same random value), `CRON_SECRET`, optional `ANTHROPIC_API_KEY` for photo AI.
+3. Backfill radar history: call `/api/satellite?op=process-next&key=<CRON_SECRET>&order=oldest` until it
+   returns `done: true` (one pass per call, about a minute each). The daily cron keeps it current.
+
 ## Standing-water detection (the prevention core)
 
 | Source | What it finds | Resolution / frequency | Access | State in this MVP |
