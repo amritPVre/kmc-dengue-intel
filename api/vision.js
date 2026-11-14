@@ -3,8 +3,21 @@
 // Relays one photo + the app's standing-water prompt to Claude vision. The browser builds the
 // prompt (supabase/functions/_shared/vision.ts) and normalises the reply, so there is one copy of
 // both. Only that prompt is accepted, so the key cannot be used for anything else.
+// When Supabase is configured, only signed-in users can use it (protects the API credit).
 // Env: ANTHROPIC_API_KEY (required), VISION_MODEL (default claude-sonnet-5-5).
 import { send } from './_lib/util.js';
+
+async function signedIn(req) {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anon) return true; // no login system on this deployment
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return false;
+  try {
+    const r = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, authorization: auth }, signal: AbortSignal.timeout(8000) });
+    return r.ok;
+  } catch { return false; }
+}
 
 const PREFIX = 'You are a vector-control assistant for the Kolkata Municipal Corporation.';
 const MODEL = () => process.env.VISION_MODEL || 'claude-sonnet-5-5';
@@ -14,6 +27,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') { send(res, { enabled: Boolean(key), model: key ? MODEL() : null }, { sMaxAge: 60 }); return; }
   if (req.method !== 'POST') { send(res, { error: 'POST only' }, { sMaxAge: 0, status: 405 }); return; }
   if (!key) { send(res, { error: 'AI vision is not configured on this deployment' }, { sMaxAge: 0, status: 503 }); return; }
+  if (!(await signedIn(req))) { send(res, { error: 'sign in to use photo analysis' }, { sMaxAge: 0, status: 401 }); return; }
   const origin = req.headers.origin || '';
   const host = req.headers['x-forwarded-host'] || req.headers.host || '';
   if (origin && !origin.endsWith(host)) { send(res, { error: 'cross-origin requests are not allowed' }, { sMaxAge: 0, status: 403 }); return; }
@@ -27,7 +41,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL(), max_tokens: 900,
+        model: MODEL(), max_tokens: 800,
         messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } }, { type: 'text', text: prompt }] }],
       }),
       signal: AbortSignal.timeout(55000),

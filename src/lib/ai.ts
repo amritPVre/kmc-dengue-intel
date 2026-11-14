@@ -4,7 +4,7 @@
 //   3. Inside Claude (the published demo): Claude vision through the viewer's own Claude account.
 //   4. None of these: the feature is shown as unavailable.
 import { normalizeVision, visionPrompt, type ImageSource, type VisionResult } from '@shared/vision';
-import { isSupabaseConfigured, repo } from './supabase';
+import { isSupabaseConfigured, repo, sb } from './supabase';
 import { apiAvailable } from './live';
 
 let apiVision: Promise<boolean> | null = null;
@@ -56,8 +56,13 @@ export interface VisionOutcome { result: VisionResult; model: string; photoPath?
 
 export async function analyzeImage(file: File, source: ImageSource, ctx: { ward?: number; capturedOn?: string; note?: string }): Promise<VisionOutcome> {
   if (await apiVisionEnabled()) {
+    let authz: Record<string, string> = {};
+    if (isSupabaseConfigured()) {
+      const { data } = await sb().auth.getSession();
+      if (data.session) authz = { authorization: `Bearer ${data.session.access_token}` };
+    }
     const r = await fetch('/api/vision', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', ...authz },
       body: JSON.stringify({ image: await toJpegBase64(file), mediaType: 'image/jpeg', prompt: visionPrompt(source, ctx) }),
       signal: AbortSignal.timeout(70000),
     });
