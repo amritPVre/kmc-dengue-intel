@@ -53,6 +53,11 @@
         "toi-emb",
         "pti-dana",
         "mp-added"
+      ],
+      "queries": [
+        "Thanthania Kalibari, Kolkata",
+        "Thanthania, Kolkata",
+        "Bidhan Sarani, Kolkata"
       ]
     },
     {
@@ -62,6 +67,11 @@
         "hs-2025-10",
         "toi-emb",
         "mp-added"
+      ],
+      "queries": [
+        "Sukeas Street, Kolkata",
+        "Sukeas Lane, Kolkata",
+        "Sukia Street, Kolkata"
       ]
     },
     {
@@ -116,6 +126,10 @@
       "query": "Keshab Chandra Sen Street, Kolkata",
       "sources": [
         "mp-added"
+      ],
+      "queries": [
+        "Keshab Chandra Sen Street, Kolkata",
+        "Keshab Sen Street, Kolkata"
       ]
     },
     {
@@ -157,6 +171,10 @@
         "toi-emb",
         "rp-2025-09",
         "tt-2022-09"
+      ],
+      "queries": [
+        "Topsia Road, Kolkata",
+        "Topsia, Kolkata"
       ]
     },
     {
@@ -180,6 +198,11 @@
       "sources": [
         "hs-2025-10",
         "tt-2022-09"
+      ],
+      "queries": [
+        "Kasba Rathtala, Kolkata",
+        "Kasba Road, Kolkata",
+        "Kasba, Kolkata"
       ]
     },
     {
@@ -251,7 +274,12 @@
       "query": "Barisha, Kolkata",
       "sources": [
         "rp-2025-09"
-      ]
+      ],
+      "queries": [
+        "Barisha, Behala, Kolkata",
+        "Barisha, Kolkata"
+      ],
+      "ward": 123
     },
     {
       "name": "Sarsuna (ward 127)",
@@ -277,7 +305,12 @@
       "sources": [
         "mp-added",
         "rp-2025-09"
-      ]
+      ],
+      "queries": [
+        "Joka, Kolkata"
+      ],
+      "ward": 143,
+      "note": "Joka is covered by wards 142–144 (boundaries pending)"
     },
     {
       "name": "Metiabruz",

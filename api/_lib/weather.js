@@ -51,15 +51,20 @@ export async function recentAndForecast(pastDays = 92) {
   return { source: 'Open-Meteo forecast API (best-match models)', today: isoDate(Date.now() + 5.5 * 3600000), boroughs: pack(pts, res) };
 }
 
-/** Reanalysis (ERA5) daily history between two dates for every borough. */
+/**
+ * Daily history between two dates for every borough. Prefers Open-Meteo's archived high-resolution
+ * forecasts (closer to convective downpours than reanalysis); falls back to ERA5 reanalysis.
+ */
 export async function archive(from, to) {
   const pts = boroughPoints();
-  const res = await call('https://archive-api.open-meteo.com/v1/archive', {
-    latitude: pts.map((p) => p.lat).join(','),
-    longitude: pts.map((p) => p.lng).join(','),
-    start_date: from, end_date: to, timezone: 'Asia/Kolkata',
-  }, DAILY);
-  return { source: 'Open-Meteo historical weather API (ERA5 reanalysis)', from, to, boroughs: pack(pts, res) };
+  const params = { latitude: pts.map((p) => p.lat).join(','), longitude: pts.map((p) => p.lng).join(','), start_date: from, end_date: to, timezone: 'Asia/Kolkata' };
+  try {
+    const res = await call('https://historical-forecast-api.open-meteo.com/v1/forecast', params, DAILY);
+    return { source: 'Open-Meteo historical forecast API (archived high-resolution forecasts)', from, to, boroughs: pack(pts, res) };
+  } catch (e) {
+    const res = await call('https://archive-api.open-meteo.com/v1/archive', params, DAILY);
+    return { source: 'Open-Meteo historical weather API (ERA5 reanalysis)', from, to, boroughs: pack(pts, res), note: `historical forecast unavailable: ${e.message}` };
+  }
 }
 
 /** Joins archive (older) and recent series per borough on date. */

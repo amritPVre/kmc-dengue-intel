@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     if (firstRecent && firstRecent > '2025-05-01') {
       try {
         const to = addDays(firstRecent, -1);
-        const hist = await cached(`weather:archive:2025-05-01:${to.slice(0, 7)}`, 24 * 20, () => archive('2025-05-01', to), 'Open-Meteo ERA5');
+        const hist = await cached(`weather:hist:2025-05-01:${to.slice(0, 7)}`, 24 * 20, () => archive('2025-05-01', to), 'Open-Meteo ERA5');
         boroughs = merge(hist.data, r);
         historySource = hist.data.source;
       } catch (e) {

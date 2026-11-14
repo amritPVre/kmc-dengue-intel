@@ -2,8 +2,9 @@
 // Nothing here is invented: wards without a figure show "no data" rather than a made-up value.
 import meta from '@/data/ward-meta.json';
 import hotspotList from '@/data/public-hotspots.json';
+import reports from '@/data/public-reports.json';
 import type { Candidate, Db, RainDay, SatellitePass, Ward, WaterDetection, WeatherWeek } from './types';
-import type { PublicData, S1Processed, WeatherSeries } from './live';
+import type { PublicData, PublicWeather, S1Processed, WeatherSeries } from './live';
 import { addDays, mondayOf } from './util';
 
 export interface Operational {
@@ -11,6 +12,37 @@ export interface Operational {
   citizen: Db['citizen']; detections: WaterDetection[]; teams?: Db['teams'];
 }
 export const EMPTY_OPS: Operational = { cases: [], surveys: [], sites: [], tasks: [], alerts: [], citizen: [], detections: [] };
+
+/**
+ * Weather models smooth out cloudbursts. Where KMC published rain-gauge readings for a day, the
+ * borough's modelled rain is replaced by the highest gauge reading inside it (or, for boroughs
+ * without a listed gauge, the median of that day's readings), and the city mean is recomputed.
+ */
+export function applyGauges(pub: PublicData): PublicData {
+  const w = pub.weather;
+  const gauges = pub.landscape?.hotspots?.gauges;
+  if (!w || !gauges?.length) return pub;
+  const byStation = new Map(gauges.map((g) => [g.station, g]));
+  const boroughs = w.boroughs.map((b) => ({ ...b, rain: [...b.rain] }));
+  const gaugeDays: NonNullable<PublicWeather['gaugeDays']> = [];
+  for (const ev of reports.rainEvents) {
+    const vals = ev.readings.map((r) => r.mm).sort((a, b) => a - b);
+    const median = vals[Math.floor(vals.length / 2)];
+    for (const b of boroughs) {
+      const i = b.date.indexOf(ev.date);
+      if (i < 0) continue;
+      const inB = ev.readings.filter((r) => byStation.get(r.station)?.borough === b.borough);
+      const mm = inB.length ? Math.max(...inB.map((r) => r.mm)) : median;
+      const modelled = b.rain[i] ?? 0;
+      if (mm > modelled) {
+        b.rain[i] = mm;
+        gaugeDays.push({ date: ev.date, borough: b.borough, mm, modelled, stations: inB.length ? inB.map((r) => r.station) : ['median of KMC gauges'] });
+      }
+    }
+  }
+  const city = { ...w.city, rain: w.city.date.map((_d, i) => { const v = boroughs.map((b) => b.rain[i]).filter((x) => x != null) as number[]; return v.length ? +(v.reduce((a, c) => a + c, 0) / v.length).toFixed(2) : null; }), rainMax: w.city.date.map((_, i) => Math.max(...boroughs.map((b) => b.rain[i] ?? 0))) };
+  return { ...pub, weather: { ...w, boroughs, city, gaugeDays } };
+}
 
 export const SEASON_START = '2025-05-05'; // first Monday of the 2025 pre-monsoon window with weather history
 

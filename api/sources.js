@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       return d ? `latest Sentinel-1 pass over Kolkata: ${d.slice(0, 10)}` : 'no Sentinel-1 items found';
     }),
     probe('OpenStreetMap Overpass', async () => {
-      const r = await fetch('https://overpass-api.de/api/status', { signal: AbortSignal.timeout(10000) });
+      const r = await fetch('https://overpass-api.de/api/status', { headers: { 'user-agent': 'KMC-Dengue-Intelligence/0.3 (BAESS Labs)', accept: 'text/plain' }, signal: AbortSignal.timeout(10000) });
       const t = await r.text();
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return /slots? available/i.test(t) ? 'query slots available' : t.split('\n').slice(0, 3).join(' ').slice(0, 120);

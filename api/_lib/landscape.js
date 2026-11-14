@@ -80,22 +80,46 @@ export async function population() {
   return { source: 'Census of India 2011, Primary Census Abstract (ward-wise), as given in Wikipedia ward articles', wards: out, missing: missing.sort((a, b) => a - b) };
 }
 
-/** Geocodes the publicly reported waterlogging pockets (OpenStreetMap Nominatim, 1 request/second). */
+/** Geocodes the publicly reported waterlogging pockets and KMC rain-gauge stations (OpenStreetMap Nominatim, 1 request/second). */
 export async function hotspots() {
   const { default: fs } = await import('node:fs');
   const { default: path } = await import('node:path');
-  const { wardAt } = await import('./geo.js');
-  const list = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/data/public-hotspots.json'), 'utf8'));
-  const out = [];
-  for (const p of list.places) {
-    const u = new URL('https://nominatim.openstreetmap.org/search');
-    u.search = new URLSearchParams({ q: p.query, format: 'jsonv2', limit: '1', countrycodes: 'in', viewbox: '88.22,22.66,88.51,22.44', bounded: '1' }).toString();
-    let hit = null;
-    try { hit = (await fetchJson(u.toString(), {}, { label: 'Nominatim', timeoutMs: 15000, retries: 1 }))[0] || null; } catch { hit = null; }
-    const lat = hit ? Number(hit.lat) : null;
-    const lng = hit ? Number(hit.lon) : null;
-    out.push({ name: p.name, sources: p.sources, lat, lng, ward: p.ward ?? (lat != null ? wardAt(lng, lat) : null), matched: hit?.display_name?.split(',').slice(0, 3).join(',') ?? null });
-    await new Promise((r) => setTimeout(r, 1100));
+  const { wardAt, wards: allWards } = await import('./geo.js');
+  const root = process.cwd();
+  const list = JSON.parse(fs.readFileSync(path.join(root, 'src/data/public-hotspots.json'), 'utf8'));
+  const reports = JSON.parse(fs.readFileSync(path.join(root, 'src/data/public-reports.json'), 'utf8'));
+  const geocode = async (queries) => {
+    for (const q of queries) {
+      const u = new URL('https://nominatim.openstreetmap.org/search');
+      u.search = new URLSearchParams({ q, format: 'jsonv2', limit: '1', countrycodes: 'in', viewbox: '88.22,22.66,88.51,22.44', bounded: '1' }).toString();
+      let hit = null;
+      try { hit = (await fetchJson(u.toString(), {}, { label: 'Nominatim', timeoutMs: 15000, retries: 1 }))[0] || null; } catch { hit = null; }
+      await new Promise((r) => setTimeout(r, 1100));
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const W = allWards().byWard;
+  const locate = async (queries, fixedWard) => {
+    const hit = await geocode(queries);
+    let lat = hit ? Number(hit.lat) : null;
+    let lng = hit ? Number(hit.lon) : null;
+    let ward = fixedWard ?? (lat != null ? wardAt(lng, lat) : null);
+    let matched = hit?.display_name?.split(',').slice(0, 3).join(',') ?? null;
+    if (lat == null && ward != null && W.get(ward)) { [lng, lat] = W.get(ward).centroid; matched = `centre of ward ${ward}`; }
+    return { lat, lng, ward, matched };
+  };
+  const places = [];
+  for (const p of list.places) places.push({ name: p.name, sources: p.sources, ...(await locate(p.queries ?? [p.query], p.ward)) });
+  const gauges = [];
+  const seen = new Set();
+  for (const ev of reports.rainEvents ?? []) {
+    for (const r of ev.readings) {
+      if (seen.has(r.station)) continue;
+      seen.add(r.station);
+      const loc = await locate([r.query]);
+      gauges.push({ station: r.station, ...loc, borough: loc.ward != null ? W.get(loc.ward)?.borough ?? null : null });
+    }
   }
-  return { source: 'Named in KMC statements and press reports; located with OpenStreetMap Nominatim', places: out, sources: list.sources };
+  return { source: 'Named in KMC statements and press reports; located with OpenStreetMap Nominatim', places, gauges, sources: list.sources };
 }

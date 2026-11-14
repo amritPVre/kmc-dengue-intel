@@ -27,7 +27,7 @@ const passOf = (it) => ({
   id: it.id,
   datetime: it.properties.datetime,
   date: it.properties.datetime.slice(0, 10),
-  platform: (it.properties.platform || '').replace('SENTINEL-', 'Sentinel-').replace('sentinel-', 'Sentinel-'),
+  platform: (it.properties.platform || '').replace(/sentinel-(\w+)/i, (_, x) => `Sentinel-${x.toUpperCase()}`),
   orbit: it.properties['sat:relative_orbit'] ?? null,
   state: it.properties['sat:orbit_state'] ?? null,
 });

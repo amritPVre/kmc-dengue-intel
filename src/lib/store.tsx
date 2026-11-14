@@ -5,7 +5,7 @@ import { analyse, type Analytics } from './analytics';
 import { generateDemo } from './demo/generator';
 import { currentSession, isSupabaseConfigured, loadFromSupabase, myProfile, repo, sb } from './supabase';
 import { apiAvailable, loadPublic, type PublicData } from './live';
-import { buildPublicDb, EMPTY_OPS, type Operational } from './liveDb';
+import { applyGauges, buildPublicDb, EMPTY_OPS, type Operational } from './liveDb';
 import type { Alert, BoroughCode, BreedingSite, CitizenReport, Db, DengueCase, FieldTask, LarvalSurvey, TaskStatus, WaterDetection } from './types';
 import { addDays, safeStorage, todayIso, uid } from './util';
 
@@ -127,12 +127,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
   const signOut = async () => { if (live0) await sb().auth.signOut(); window.location.reload(); };
 
+  // KMC gauge readings replace modelled rain on the days they were published
+  const pubAdj = useMemo(() => (pub ? applyGauges(pub) : null), [pub]);
   const db = useMemo<Db | null>(() => {
     if (drill) return drillDb;
-    if (!pub?.weather || !opsLoaded) return null;
-    const asOf = viewDate && viewDate < pub.weather.today ? viewDate : pub.weather.today;
-    return buildPublicDb(pub, asOf, ops, live0 ? 'supabase' : 'public', overrides);
-  }, [drill, drillDb, pub, ops, opsLoaded, viewDate, overrides, live0]);
+    if (!pubAdj?.weather || !opsLoaded) return null;
+    const asOf = viewDate && viewDate < pubAdj.weather.today ? viewDate : pubAdj.weather.today;
+    return buildPublicDb(pubAdj, asOf, ops, live0 ? 'supabase' : 'public', overrides);
+  }, [drill, drillDb, pubAdj, ops, opsLoaded, viewDate, overrides, live0]);
 
   const a = useMemo(() => (db ? analyse(db, { config }) : null), [db, config]);
   const notify = useCallback((msg: string) => {
@@ -264,7 +266,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const value: Ctx = {
-    db, pub, needsLogin, signIn, signOut, roleLocked: live0 && !drill, a, error, scope, setScope, config, setConfig, toast, notify,
+    db, pub: pubAdj, needsLogin, signIn, signOut, roleLocked: live0 && !drill, a, error, scope, setScope, config, setConfig, toast, notify,
     drill, setDrill, viewDate, setViewDate, today: pub?.weather?.today ?? today,
     addCase, addSurvey, addSite, addTask, setTaskStatus, setAlertStatus, actionAlert, runAlerting, setCitizenStatus, importCases,
     addDetection, setDetectionStatus, dispatchDetection,

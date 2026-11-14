@@ -59,6 +59,7 @@ export function Satellite() {
     label: `Ward ${s.ward}: about ${s.areaHa.toFixed(2)} ha new water in this 250 m cell (${Math.round(s.newFrac * 100)}% of the cell)`, onClick: () => go(href.ward(s.ward)),
   }));
   const after = history.find((h) => h.pass.date >= '2025-09-23' && h.pass.date <= '2025-09-30');
+  // (first radar pass after the 22–23 September 2025 downpour)
   const pockets = (pub?.landscape?.hotspots?.places ?? []).filter((p) => p.ward != null);
 
   return (
@@ -147,10 +148,11 @@ function CloudburstCheck({ pass, pockets }: { pass: ReturnType<typeof passesUpTo
   const flagged = new Set(pass.flaggedWards);
   const wet = new Set(Object.entries(pass.wards).filter(([, v]) => (v?.[1] ?? 0) > 0.5).map(([w]) => Number(w)));
   const hit = pockets.filter((p) => p.ward != null && wet.has(p.ward));
-  const g = reports.rainGauges;
+  const ev = reports.rainEvents[0];
   const city = pub?.weather?.city;
-  const modelled = (d: string) => { const i = city?.date.indexOf(d) ?? -1; return i >= 0 ? city!.rain[i] ?? 0 : null; };
-  const maxB = (d: string) => Math.max(...(pub?.weather?.boroughs ?? []).map((b) => { const i = b.date.indexOf(d); return i >= 0 ? b.rain[i] ?? 0 : 0; }));
+  const gd = (pub?.weather?.gaugeDays ?? []).filter((x) => x.date === ev.date);
+  const modelMean = gd.length ? gd.reduce((a, x) => a + x.modelled, 0) / gd.length : null;
+  const used = city ? city.rain[city.date.indexOf(ev.date)] : null;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="text-sm">
@@ -160,14 +162,14 @@ function CloudburstCheck({ pass, pockets }: { pass: ReturnType<typeof passesUpTo
         {flagged.size > 0 && <p className="mt-2 text-xs text-slate-600">Flagged wards: {[...flagged].sort((a, b) => a - b).join(', ')}</p>}
       </div>
       <div>
-        <Table head={['KMC gauge', 'Reported', 'Weather model, same day']}>
-          {g.readings.map((r) => (
-            <tr key={r.station}><td className="px-2 py-1.5">{r.station}</td><td className="px-2 py-1.5 tabular-nums">{r.mm} mm</td><td className="px-2 py-1.5 text-slate-500">—</td></tr>
-          ))}
-          <tr className="bg-slate-50"><td className="px-2 py-1.5 font-medium">Model city mean / wettest borough</td><td className="px-2 py-1.5" />
-            <td className="px-2 py-1.5 tabular-nums">{modelled('2025-09-23')?.toFixed(0) ?? '—'} / {Number.isFinite(maxB('2025-09-23')) ? maxB('2025-09-23').toFixed(0) : '—'} mm</td></tr>
+        <Table head={['KMC gauge', 'Reported', 'Borough']}>
+          {ev.readings.map((r) => {
+            const g = pub?.landscape?.hotspots?.gauges?.find((x) => x.station === r.station);
+            return <tr key={r.station}><td className="px-2 py-1">{r.station}</td><td className="px-2 py-1 tabular-nums">{r.mm} mm</td><td className="px-2 py-1 text-xs text-slate-500">{g?.borough ?? '—'}{g?.ward ? ` · ward ${g.ward}` : ''}</td></tr>;
+          })}
+          <tr className="bg-slate-50"><td className="px-2 py-1.5 font-medium" colSpan={3}>Weather model for the same day: {modelMean == null ? '—' : `${modelMean.toFixed(0)} mm`} (borough average). The app uses the gauge readings instead: {used == null ? '—' : `${used.toFixed(0)} mm`} city average.</td></tr>
         </Table>
-        <p className="mt-1 text-[11px] text-slate-500">Gauge readings as reported by <a className="underline" href={g.url} target="_blank" rel="noreferrer">{g.publisher}</a>. Weather models smooth out cloudbursts, which is why KMC's own 39+ rain gauges should feed the system in production.</p>
+        <p className="mt-1 text-[11px] text-slate-500">Readings as published by KMC via <a className="underline" href={ev.url} target="_blank" rel="noreferrer">{ev.publisher.replace(' (KMC list of readings)', '')}</a>{ev.alsoReportedBy.map((x) => <span key={x.url}>, <a className="underline" href={x.url} target="_blank" rel="noreferrer">{x.publisher}</a></span>)}. IMD Alipore: {ev.imd.mm} mm ({ev.imd.note}). Weather models badly underestimate cloudbursts, so KMC's live gauge feed is the first integration to switch on.</p>
       </div>
     </div>
   );

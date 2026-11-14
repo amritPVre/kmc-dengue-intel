@@ -11,6 +11,8 @@ export interface WeatherSeries {
   rainProb?: (number | null)[] | null;
 }
 export interface PublicWeather {
+  /** Days where a borough's modelled rain was replaced by KMC gauge readings published for that day. */
+  gaugeDays?: { date: string; borough: string; mm: number; modelled: number; stations: string[] }[];
   source: string;
   historySource: string | null;
   today: string;
@@ -33,6 +35,7 @@ export interface S1Processed {
   processedAt: string;
 }
 export interface S2Scene { date: string; platform: string; cloud: number; items: { id: string; tile: string | null; bbox: number[]; cloud: number; trueColour: string }[] }
+export interface Gauge { station: string; lat: number | null; lng: number | null; ward: number | null; borough: string | null; matched: string | null }
 export interface Hotspot { name: string; sources: string[]; lat: number | null; lng: number | null; ward: number | null; matched: string | null }
 export interface LayerPart { source: string; updatedAt?: string; error?: string; item?: string }
 export interface Landscape {
@@ -40,7 +43,7 @@ export interface Landscape {
   water?: LayerPart & { wards: Record<string, { seasonal: number; frequent: number; permanent: number }> };
   elevation?: LayerPart & { wards: Record<string, { mean: number; p10: number; p50: number }> };
   population?: LayerPart & { wards: Record<string, number>; missing: number[] };
-  hotspots?: LayerPart & { places: Hotspot[]; sources: Record<string, { publisher: string; date: string | null; title: string; url: string }> };
+  hotspots?: LayerPart & { places: Hotspot[]; gauges?: Gauge[]; sources: Record<string, { publisher: string; date: string | null; title: string; url: string }> };
 }
 export interface OsmData {
   source: string; licence: string; osmBase: string | null; updatedAt: string; total: number;
