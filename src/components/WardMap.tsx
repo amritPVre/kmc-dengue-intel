@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Pane, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type PathOptions } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import geo from '@/data/wards.geo.json';
@@ -60,9 +60,17 @@ function Fit({ bounds }: { bounds: LatLngBoundsExpression }) {
 export interface MapPoint { id: string; lat: number; lng: number; color: string; radius?: number; label: string; ring?: boolean; square?: boolean; onClick?: () => void }
 export interface MapOverlay { key: string; url: string; opacity?: number; attribution?: string; maxNativeZoom?: number }
 export type Basemap = 'none' | 'streets' | 'imagery';
-const BASEMAPS: Record<Exclude<Basemap, 'none'>, { url: string; attribution: string }> = {
-  streets: { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', attribution: '© OpenStreetMap contributors © CARTO' },
-  imagery: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' },
+const BASEMAPS: Record<Exclude<Basemap, 'none'>, { url: string; labels?: string; attribution: string }> = {
+  streets: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Base map © Esri, HERE, Garmin, © OpenStreetMap contributors',
+  },
+  imagery: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
+  },
 };
 
 export function WardMap({
@@ -126,7 +134,12 @@ export function WardMap({
   return (
     <div className="relative overflow-hidden rounded-lg border border-slate-200" style={{ height }}>
       <MapContainer ref={ref} bounds={bounds} zoomSnap={0.25} scrollWheelZoom={false} fadeAnimation={false} markerZoomAnimation={false} style={{ height: '100%', width: '100%', background: '#EEF2F1' }} attributionControl={false}>
-        {tileUrl && <TileLayer url={tileUrl} opacity={basemap === 'imagery' ? 1 : 0.9} maxZoom={19} />}
+        {tileUrl && <TileLayer url={tileUrl} opacity={1} maxZoom={19} maxNativeZoom={basemap === 'imagery' ? 19 : 16} />}
+        {basemap !== 'none' && BASEMAPS[basemap].labels && (
+          <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
+            <TileLayer url={BASEMAPS[basemap].labels!} maxZoom={19} maxNativeZoom={16} />
+          </Pane>
+        )}
         {overlays.map((o) => <TileLayer key={o.key} url={o.url} opacity={o.opacity ?? 0.85} maxNativeZoom={o.maxNativeZoom ?? 16} maxZoom={19} zIndex={300} />)}
         <Fit bounds={bounds} />
         <GeoJSON

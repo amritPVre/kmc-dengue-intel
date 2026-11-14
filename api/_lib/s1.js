@@ -20,7 +20,7 @@ export const WATER_DB = -16;
 const lin = (db) => 10 ** (db / 10);
 export const EDGES = [0, lin(-20), lin(-18), lin(-16), lin(-14), lin(-12), 1000].map((x) => +x.toPrecision(6));
 const PARAMS = { assets: 'vv', histogram_bins: EDGES.join(','), nodata: -32768 };
-export const RULES = { wardMinHa: 2, wardMinFrac: 0.01, maxWards: 6, cellM: 250, cellMinFrac: 0.12, cellMinWet: 0.2, maxSpots: 40 };
+export const RULES = { wardMinHa: 2, wardMinFrac: 0.01, maxWards: 6, cellM: 250, cellMinFrac: 0.12, cellMinWet: 0.2, maxSpots: 40, cellMaxKnownWater: 0.4 };
 const KMC_CENTRE = [88.36, 22.55];
 
 const passOf = (it) => ({
@@ -90,6 +90,35 @@ async function baselineShares(base) {
   return shares;
 }
 
+/**
+ * Share of each cell that has been water in at least 10 % of observations since 1984 (JRC Global
+ * Surface Water): ponds, wetlands, docks, fish farms and paddies. Cells that are mostly such known
+ * water are dropped, so a spot means water on ground that is normally dry.
+ */
+async function knownWater(ward, cells) {
+  const key = `jrccells:${ward}:${RULES.cellM}`;
+  const hit = await getLayer(key);
+  if (hit?.data?.shares) return new Map(Object.entries(hit.data.shares));
+  let item = (await getLayer('jrc:item'))?.data?.id;
+  if (!item) {
+    const items = await searchItems({ collection: 'jrc-gsw', bbox: KMC_BBOX, maxItems: 5 });
+    item = items[0]?.id;
+    if (!item) return new Map();
+    await putLayer('jrc:item', { id: item }, 'Planetary Computer jrc-gsw');
+  }
+  const { stats } = await polygonStats('jrc-gsw', item, { assets: 'occurrence', histogram_bins: '0,10,101', nodata: 255 }, cells, { batch: 20, concurrency: 4 });
+  const shares = {};
+  for (const c of cells) {
+    const st = stats.get(c.properties.id);
+    if (!st?.histogram) continue;
+    const [n] = st.histogram;
+    const tot = n[0] + n[1];
+    shares[c.properties.id] = tot ? +(n[1] / tot).toFixed(3) : 0;
+  }
+  await putLayer(key, { shares }, 'JRC Global Surface Water via Planetary Computer');
+  return new Map(Object.entries(shares));
+}
+
 async function cellShares(itemId, ward, cells) {
   const { stats } = await polygonStats(COLLECTION, itemId, PARAMS, cells, { batch: 20, concurrency: 6 });
   const out = new Map();
@@ -117,17 +146,19 @@ export async function processPass(pass) {
   }
   flagged.sort((a, b) => b.newHa - a.newHa);
   const spots = [];
+  let droppedKnownWater = 0;
   if (base) {
     for (const { ward } of flagged.slice(0, RULES.maxWards)) {
       if (Date.now() - t0 > 200000) break; // keep inside the function time limit
       const cells = wardCells(ward, RULES.cellM);
       if (!cells.length) continue;
-      const [cw, cd] = await Promise.all([cellShares(pass.id, ward, cells), cellShares(base.id, ward, cells)]);
+      const [cw, cd, kw] = await Promise.all([cellShares(pass.id, ward, cells), cellShares(base.id, ward, cells), knownWater(ward, cells).catch(() => new Map())]);
       for (const c of cells) {
         const a = cw.get(c.properties.id);
         const b = cd.get(c.properties.id);
         if (a == null || b == null) continue;
         const nf = a - b;
+        if (nf >= RULES.cellMinFrac && a >= RULES.cellMinWet && Number(kw.get(c.properties.id) ?? 0) > RULES.cellMaxKnownWater) { droppedKnownWater++; continue; }
         if (nf >= RULES.cellMinFrac && a >= RULES.cellMinWet) {
           spots.push({ ward, lat: c.properties.lat, lng: c.properties.lng, newFrac: round(nf, 3), wet: round(a, 3), areaHa: round(nf * c.properties.areaHa, 2) });
         }
@@ -138,7 +169,10 @@ export async function processPass(pass) {
   const result = {
     pass, baseline: base, thresholdDb: WATER_DB, rules: RULES,
     wards: wardOut,
-    flaggedWards: flagged.map((f) => f.ward),
+    // a ward is flagged only where new water was located on normally dry ground
+    flaggedWards: flagged.map((f) => f.ward).filter((w) => spots.some((s) => s.ward === w)),
+    candidateWards: flagged.map((f) => f.ward),
+    droppedKnownWater,
     spots: spots.slice(0, RULES.maxSpots),
     totals: {
       wardsMeasured: Object.values(wardOut).filter(Boolean).length,

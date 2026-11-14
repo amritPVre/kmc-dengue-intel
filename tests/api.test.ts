@@ -45,15 +45,20 @@ describe('Sentinel-1 pass processing', () => {
       const u = new URL(url);
       if (u.pathname.endsWith('/search')) {
         const body = JSON.parse(String(init?.body));
+        if (body.collections[0] === 'jrc-gsw') return json({ type: 'FeatureCollection', features: [{ id: 'JRC', properties: {}, geometry: KMC_POLY }], links: [] });
         return json({ type: 'FeatureCollection', features: body.datetime.startsWith('2025-02') ? [dry] : [wet], links: [] });
       }
       if (u.pathname.endsWith('/item/statistics')) {
         const item = u.searchParams.get('item');
         const fc = JSON.parse(String(init?.body));
+        if (item === 'JRC') {
+          // the southern half of ward 106's cells are a known pond: radar water there must be ignored
+          return json({ type: 'FeatureCollection', features: fc.features.map((f: { properties: { lat: number } }) => ({ ...f, properties: { ...f.properties, statistics: { occurrence_b1: { histogram: [f.properties.lat < 22.504 ? [20, 80] : [100, 0], [0, 10, 101]] } } } })) });
+        }
         return json({
           type: 'FeatureCollection',
           features: fc.features.map((f: { properties: { id: string; ward: number; lat?: number } }) => {
-            const inFlooded = f.properties.ward === 106 && (f.properties.lat == null || f.properties.lat > 22.48);
+            const inFlooded = f.properties.ward === 106;
             const waterPx = item === wet.id && inFlooded ? 40 : 2; // 40 % of pixels dark after the rain
             return { ...f, properties: { ...f.properties, statistics: { vv_b1: { valid_pixels: 100, histogram: [[0, 0, waterPx, 10, 40, 50 - waterPx], EDGES] } } } };
           }),
@@ -71,6 +76,8 @@ describe('Sentinel-1 pass processing', () => {
     expect(r.wards[66].newFrac).toBe(0);
     expect(r.spots.length).toBeGreaterThan(0);
     expect(r.spots.every((s: { ward: number }) => s.ward === 106)).toBe(true);
+    expect(r.droppedKnownWater).toBeGreaterThan(0);
+    expect(r.spots.every((s: { lat: number }) => s.lat >= 22.504)).toBe(true);
     expect(r.tiles.water).toContain('sentinel-1-rtc');
   });
 });
