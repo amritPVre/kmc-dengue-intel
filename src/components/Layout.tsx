@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, Bell, ClipboardList, Droplets, FileText, LayoutDashboard, Map, Megaphone, Menu, Settings, Stethoscope, X } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarClock, ClipboardList, Database, Droplets, FileText, FlaskConical, LayoutDashboard, Map, Megaphone, Menu, Radar, Radio, Scale, Settings, Stethoscope, X } from 'lucide-react';
 import { ROLE_LABEL, useData, type Role } from '@/lib/store';
 import { href, type Route } from '@/lib/router';
 import { BOROUGHS, type BoroughCode } from '@/lib/types';
@@ -10,12 +10,15 @@ interface NavItem { key: Route['page']; label: string; href: string; icon: React
 const NAV: NavItem[] = [
   { key: 'overview', label: 'City overview', href: href.overview, icon: <LayoutDashboard size={18} />, roles: ['hq'] },
   { key: 'water', label: 'Standing water', href: href.water, icon: <Droplets size={18} />, roles: ['hq', 'borough', 'ward', 'field', 'councillor'] },
+  { key: 'satellite', label: 'Satellite radar', href: href.satellite, icon: <Radar size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
+  { key: 'evidence', label: 'Evidence check', href: href.evidence, icon: <Scale size={18} />, roles: ['hq', 'borough'] },
   { key: 'boroughs', label: 'Boroughs', href: href.boroughs, icon: <Map size={18} />, roles: ['hq', 'borough'] },
   { key: 'alerts', label: 'Alerts', href: href.alerts, icon: <Bell size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
   { key: 'field', label: 'Field operations', href: href.field, icon: <ClipboardList size={18} />, roles: ['hq', 'borough', 'ward', 'field'] },
   { key: 'cases', label: 'Case reporting', href: href.cases, icon: <Stethoscope size={18} />, roles: ['hq', 'borough', 'ward', 'lab'] },
   { key: 'citizen', label: 'Citizen reports', href: href.citizen, icon: <Megaphone size={18} />, roles: ['hq', 'borough', 'ward'] },
   { key: 'sitrep', label: 'Situation report', href: href.sitrep, icon: <FileText size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
+  { key: 'sources', label: 'Data sources', href: href.sources, icon: <Database size={18} />, roles: ['hq', 'borough', 'ward', 'councillor'] },
   { key: 'settings', label: 'Settings & model', href: href.settings, icon: <Settings size={18} />, roles: ['hq'] },
 ];
 
@@ -28,7 +31,7 @@ export function homeFor(role: Role, borough: BoroughCode, ward: number) {
 }
 
 export function Layout({ route, children }: { route: Route; children: ReactNode }) {
-  const { db, a, scope, setScope, toast, roleLocked, signOut } = useData();
+  const { db, a, scope, setScope, toast, roleLocked, signOut, drill, setDrill, viewDate, setViewDate, today, pub } = useData();
   const [open, setOpen] = useState(false);
   const newAlerts = db ? db.alerts.filter((x) => x.status === 'New' && (scope.role === 'hq' || (scope.role === 'borough' ? db.wards.find((w) => w.ward === x.ward)?.borough === scope.borough : x.ward === scope.ward))).length : 0;
   const myHome = { key: scope.role === 'borough' ? 'borough' : 'ward', label: scope.role === 'borough' ? `Borough ${scope.borough}` : `Ward ${scope.ward}`, href: scope.role === 'borough' ? href.borough(scope.borough) : href.ward(scope.ward) };
@@ -61,11 +64,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
 
   return (
     <div className="min-h-screen">
-      {db?.mode !== 'supabase' && (
-        <div className="flex items-center justify-center gap-2 bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-900">
-          <AlertTriangle size={14} className="shrink-0" /> Demo mode — all case, survey and weather figures are synthetic, not real KMC data.
-        </div>
-      )}
+      <ModeBanner />
       <header className="sticky top-0 z-[1000] border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex items-center gap-3 px-3 py-2.5 lg:px-5">
           <button className="rounded p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button>
@@ -77,7 +76,24 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
             </span>
           </a>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {a && <span className="hidden text-xs text-slate-500 md:inline">Data as of {fmtDate(db!.asOf)}</span>}
+            {a && !drill && pub?.weather && (
+              <label className="hidden items-center gap-1 text-xs text-slate-500 md:flex" title="Replay the real data as it stood on a past date">
+                <CalendarClock size={14} />
+                <select aria-label="View date" className={`${inputCls} w-auto py-1 text-xs`} value={viewDate ?? ''} onChange={(e) => setViewDate(e.target.value || null)}>
+                  <option value="">Today ({fmtDate(today, false)})</option>
+                  {REPLAY_PRESETS.filter((p) => p.date < today).map((p) => <option key={p.date} value={p.date}>{p.label}</option>)}
+                  {viewDate && !REPLAY_PRESETS.some((p) => p.date === viewDate) && <option value={viewDate}>{fmtDate(viewDate)}</option>}
+                </select>
+                <input type="date" aria-label="Pick a date" className={`${inputCls} w-auto py-1 text-xs`} min="2025-06-01" max={today} value={viewDate ?? today} onChange={(e) => setViewDate(e.target.value && e.target.value < today ? e.target.value : null)} />
+              </label>
+            )}
+            {a && drill && <span className="hidden text-xs text-slate-500 md:inline">Drill data as of {fmtDate(db!.asOf)}</span>}
+            {scope.role === 'hq' && (
+              <button onClick={() => setDrill(!drill)} title={drill ? 'Back to live open data' : 'Practise outbreak response on simulated cases'}
+                className={`hidden items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs sm:flex ${drill ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                {drill ? <><Radio size={13} /> Back to live</> : <><FlaskConical size={13} /> Outbreak drill</>}
+              </button>
+            )}
             {roleLocked ? (
               <button onClick={signOut} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50">Sign out</button>
             ) : (
@@ -120,6 +136,46 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
         <main className="min-w-0 flex-1 px-3 py-4 lg:px-6 lg:py-6">{children}</main>
       </div>
       {toast && <div className="fixed bottom-4 left-1/2 z-[3000] -translate-x-1/2 rounded-lg bg-ink px-4 py-2 text-sm text-white shadow-lg" role="status">{toast}</div>}
+    </div>
+  );
+}
+
+/** Dates worth replaying with real data. */
+export const REPLAY_PRESETS = [
+  { date: '2025-09-24', label: '24 Sep 2025 — day after the cloudburst' },
+  { date: '2025-10-06', label: '6 Oct 2025 — two weeks after the cloudburst' },
+  { date: '2026-07-20', label: '20 Jul 2026 — monsoon' },
+  { date: '2026-09-15', label: '15 Sep 2026 — before the 2026 rise' },
+  { date: '2026-10-07', label: '7 Oct 2026 — 2026 season rise' },
+];
+
+function ModeBanner() {
+  const { db, drill, setDrill, viewDate, setViewDate, pub, a } = useData();
+  if (!db) return null;
+  if (drill) {
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-2 bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-900">
+        <AlertTriangle size={14} className="shrink-0" /> Outbreak drill — cases, surveys and alerts are simulated for training. Not real KMC data.
+        {pub && <button className="underline" onClick={() => setDrill(false)}>Back to live data</button>}
+      </div>
+    );
+  }
+  if (viewDate) {
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-2 bg-indigo-100 px-3 py-1.5 text-center text-xs font-medium text-indigo-900">
+        <CalendarClock size={14} className="shrink-0" /> Replay: real weather, radar and map data as they stood on {fmtDate(db.asOf)}. Rain forecasts are not used in replay.
+        <button className="underline" onClick={() => setViewDate(null)}>Back to today</button>
+      </div>
+    );
+  }
+  const loading = pub ? Object.values(pub.status).filter((s) => s === 'loading').length : 0;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-emerald-50 px-3 py-1.5 text-center text-xs text-emerald-900">
+      <span className="inline-flex items-center gap-1 font-semibold"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-600" /> Live open data</span>
+      <span>Weather: Open-Meteo · Radar: Copernicus Sentinel-1 · Land cover: ESA, JRC · Sites: OpenStreetMap · Population: Census 2011</span>
+      {a?.noCases && <span className="font-medium text-amber-800">Ward case data: waiting for KMC feed</span>}
+      {loading > 0 && <span className="text-slate-600">· loading {loading} more source{loading > 1 ? 's' : ''}…</span>}
+      <a href={href.sources} className="underline">Sources</a>
     </div>
   );
 }

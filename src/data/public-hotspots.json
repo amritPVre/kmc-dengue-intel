@@ -1,0 +1,299 @@
+{
+  "note": "Waterlogging pockets named by KMC officials or in press reports. Locations are found by name with OpenStreetMap's geocoder, so each is a neighbourhood centre, not an exact street.",
+  "sources": {
+    "hs-2025-10": {
+      "publisher": "Hindusthan Samachar",
+      "date": "2025-10-11",
+      "title": "Kolkata submerged again as 70 mm of rain falls in 30 minutes",
+      "url": "https://english.hindusthansamachar.in//Encyc/2025/10/11/Kolkata-Submerged-Again-as-70-mm-of-Rain-Falls-in.php"
+    },
+    "mp-added": {
+      "publisher": "Millennium Post",
+      "date": null,
+      "title": "Most city streets cleared of water except added areas: KMC",
+      "url": "https://www.millenniumpost.in/bengal/most-city-streets-cleared-of-water-except-added-areas-kmc-628812"
+    },
+    "toi-emb": {
+      "publisher": "The Times of India (via inkl)",
+      "date": null,
+      "title": "Rain forecast puts KMC focus on EMB pockets",
+      "url": "https://www.inkl.com/news/rain-forecast-puts-kolkata-municipal-corporation-focus-on-emb-pockets"
+    },
+    "pti-dana": {
+      "publisher": "PTI (The Week)",
+      "date": "2024-10-25",
+      "title": "Cyclone Dana triggers widespread waterlogging in Kolkata",
+      "url": "https://www.theweek.in/wire-updates/national/2024/10/25/cal16-wb-cyclone-rains.html"
+    },
+    "tt-dana": {
+      "publisher": "The Telegraph",
+      "date": "2024-10-27",
+      "title": "Some city pockets remain under water: KMC",
+      "url": "https://obeta.ttef.in/west-bengal/kolkata/some-city-pockets-remain-under-water-kolkata-municipal-corporation-working-to-clear-inundated-stretches-say-mayor-firhad-hakim/cid/2058680"
+    },
+    "rp-2025-09": {
+      "publisher": "Reporter Post",
+      "date": "2025-09-24",
+      "title": "Kolkata battles waterlogging as torrential rain claims 10 lives",
+      "url": "https://reporterpost.in/article/nation/40938/kolkata-battles-waterlogging-as-torrential-rain-claims-10-lives"
+    },
+    "tt-2022-09": {
+      "publisher": "The Telegraph",
+      "date": "2022-09-14",
+      "title": "Waterlogging menace returns to pockets in Kolkata",
+      "url": "https://obeta.ttef.in/my-kolkata/news/waterlogging-menace-returns-to-pockets-in-kolkata/cid/1886475"
+    }
+  },
+  "places": [
+    {
+      "name": "Thanthania",
+      "query": "Thanthania Kalibari, Kolkata",
+      "sources": [
+        "hs-2025-10",
+        "toi-emb",
+        "pti-dana",
+        "mp-added"
+      ]
+    },
+    {
+      "name": "Sukia Street",
+      "query": "Sukeas Street, Kolkata",
+      "sources": [
+        "hs-2025-10",
+        "toi-emb",
+        "mp-added"
+      ]
+    },
+    {
+      "name": "Amherst Street",
+      "query": "Amherst Street, Kolkata",
+      "sources": [
+        "toi-emb",
+        "mp-added",
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "MG Road – College Street crossing",
+      "query": "College Street, Kolkata",
+      "sources": [
+        "toi-emb",
+        "pti-dana",
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Maniktala",
+      "query": "Maniktala, Kolkata",
+      "sources": [
+        "hs-2025-10"
+      ]
+    },
+    {
+      "name": "Beliaghata",
+      "query": "Beleghata, Kolkata",
+      "sources": [
+        "toi-emb"
+      ]
+    },
+    {
+      "name": "Kankurgachi underpass",
+      "query": "Kankurgachi, Kolkata",
+      "sources": [
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Bowbazar",
+      "query": "Bowbazar, Kolkata",
+      "sources": [
+        "toi-emb",
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Keshab Chandra Sen Street",
+      "query": "Keshab Chandra Sen Street, Kolkata",
+      "sources": [
+        "mp-added"
+      ]
+    },
+    {
+      "name": "Camac Street",
+      "query": "Camac Street, Kolkata",
+      "sources": [
+        "toi-emb"
+      ]
+    },
+    {
+      "name": "Shakespeare Sarani",
+      "query": "Shakespeare Sarani, Kolkata",
+      "sources": [
+        "mp-added"
+      ]
+    },
+    {
+      "name": "New Market / Dharmatala",
+      "query": "New Market, Kolkata",
+      "sources": [
+        "pti-dana"
+      ]
+    },
+    {
+      "name": "Park Circus",
+      "query": "Park Circus, Kolkata",
+      "sources": [
+        "mp-added",
+        "pti-dana",
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Topsia",
+      "query": "Topsia, Kolkata",
+      "sources": [
+        "hs-2025-10",
+        "mp-added",
+        "toi-emb",
+        "rp-2025-09",
+        "tt-2022-09"
+      ]
+    },
+    {
+      "name": "Tiljala",
+      "query": "Tiljala, Kolkata",
+      "sources": [
+        "hs-2025-10",
+        "tt-2022-09"
+      ]
+    },
+    {
+      "name": "Picnic Garden",
+      "query": "Picnic Garden, Kolkata",
+      "sources": [
+        "tt-2022-09"
+      ]
+    },
+    {
+      "name": "Kasba (Rathtala, Kathgola, Haltu)",
+      "query": "Kasba, Kolkata",
+      "sources": [
+        "hs-2025-10",
+        "tt-2022-09"
+      ]
+    },
+    {
+      "name": "Haltu",
+      "query": "Haltu, Kolkata",
+      "sources": [
+        "tt-2022-09"
+      ]
+    },
+    {
+      "name": "VIP Bazaar / Mukundapur",
+      "query": "Mukundapur, Kolkata",
+      "sources": [
+        "tt-2022-09"
+      ]
+    },
+    {
+      "name": "Ballygunge",
+      "query": "Ballygunge, Kolkata",
+      "sources": [
+        "mp-added"
+      ]
+    },
+    {
+      "name": "Rashbehari Avenue",
+      "query": "Rashbehari Avenue, Kolkata",
+      "sources": [
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Hazra and Bhowanipore",
+      "query": "Hazra, Kolkata",
+      "sources": [
+        "pti-dana"
+      ]
+    },
+    {
+      "name": "Alipore",
+      "query": "Alipore, Kolkata",
+      "sources": [
+        "hs-2025-10"
+      ]
+    },
+    {
+      "name": "Patuli",
+      "query": "Patuli, Kolkata",
+      "sources": [
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Santoshpur",
+      "query": "Santoshpur, Kolkata",
+      "sources": [
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Behala",
+      "query": "Behala, Kolkata",
+      "sources": [
+        "hs-2025-10",
+        "pti-dana"
+      ]
+    },
+    {
+      "name": "Barisha",
+      "query": "Barisha, Kolkata",
+      "sources": [
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Sarsuna (ward 127)",
+      "query": "Sarsuna, Kolkata",
+      "sources": [
+        "mp-added",
+        "tt-dana",
+        "rp-2025-09"
+      ],
+      "ward": 127
+    },
+    {
+      "name": "Behala pockets (ward 128)",
+      "query": "Behala Chowrasta, Kolkata",
+      "sources": [
+        "tt-dana"
+      ],
+      "ward": 128
+    },
+    {
+      "name": "Joka",
+      "query": "Joka, Kolkata",
+      "sources": [
+        "mp-added",
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Metiabruz",
+      "query": "Metiabruz, Kolkata",
+      "sources": [
+        "mp-added",
+        "rp-2025-09"
+      ]
+    },
+    {
+      "name": "Badartala and Rajabagan (ward 141)",
+      "query": "Rajabagan, Kolkata",
+      "sources": [
+        "tt-dana"
+      ],
+      "ward": 141
+    }
+  ]
+}

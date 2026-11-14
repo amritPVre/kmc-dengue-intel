@@ -12,14 +12,19 @@ import { Citizen } from './pages/Citizen';
 import { SitRep } from './pages/SitRep';
 import { Settings } from './pages/Settings';
 import { Water } from './pages/Water';
+import { Satellite } from './pages/Satellite';
+import { Evidence } from './pages/Evidence';
+import { Sources } from './pages/Sources';
+import { PART_LABEL, type PartName } from './lib/live';
 
 function Login() {
   const { signIn } = useData();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [state, setState] = useState<'idle' | 'sent' | string>('idle');
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    try { await signIn(email); setState('sent'); } catch (err) { setState(err instanceof Error ? err.message : String(err)); }
+    try { await signIn(email, password || undefined); setState(password ? 'idle' : 'sent'); } catch (err) { setState(err instanceof Error ? err.message : String(err)); }
   };
   return (
     <div className="grid min-h-screen place-items-center bg-paper p-4">
@@ -28,7 +33,10 @@ function Login() {
         <label className="block text-sm font-medium text-slate-700">Official email
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
-        <button className="mt-4 w-full rounded-lg bg-kmc-600 py-2 text-sm font-medium text-white">Send sign-in link</button>
+        <label className="mt-3 block text-sm font-medium text-slate-700">Password <span className="font-normal text-slate-500">(leave empty to get an email link)</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" autoComplete="current-password" />
+        </label>
+        <button className="mt-4 w-full rounded-lg bg-kmc-600 py-2 text-sm font-medium text-white">{password ? 'Sign in' : 'Send sign-in link'}</button>
         {state === 'sent' && <p className="mt-3 text-sm text-emerald-700">Check your inbox for the sign-in link.</p>}
         {state !== 'idle' && state !== 'sent' && <p className="mt-3 text-sm text-red-700">{state}</p>}
         <p className="mt-4 text-xs text-slate-500">Access is limited to KMC health staff, labs and councillors registered by the HQ administrator.</p>
@@ -39,7 +47,7 @@ function Login() {
 
 function Pages() {
   const route = useRoute();
-  const { db, a, error, scope, needsLogin } = useData();
+  const { db, a, error, scope, needsLogin, pub } = useData();
 
   // keep each role inside its own area
   useEffect(() => {
@@ -50,6 +58,8 @@ function Pages() {
     const wardOf = (n: number) => db.wards.find((w) => w.ward === n);
     const blocked =
       (scope.role !== 'hq' && (r.page === 'overview' || r.page === 'settings')) ||
+      (!['hq', 'borough'].includes(scope.role) && r.page === 'evidence') ||
+      ((scope.role === 'field' || scope.role === 'lab') && (r.page === 'satellite' || r.page === 'sources')) ||
       (scope.role !== 'hq' && r.page === 'borough' && (scope.role !== 'borough' || r.code !== scope.borough)) ||
       (scope.role === 'borough' && r.page === 'ward' && wardOf(r.ward)?.borough !== scope.borough) ||
       ((scope.role === 'ward' || scope.role === 'councillor' || scope.role === 'field') && r.page === 'ward' && r.ward !== scope.ward) ||
@@ -65,7 +75,22 @@ function Pages() {
   if (!db || !a) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-slate-600">
-        <div className="text-center"><div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-kmc-100 border-t-kmc-600" />Loading ward data…</div>
+        <div className="w-full max-w-md px-4">
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-kmc-100 border-t-kmc-600" />
+          <p className="mb-3 text-center font-medium text-ink">Connecting to live data sources…</p>
+          {pub && (
+            <ul className="space-y-1.5 rounded-xl border border-slate-200 bg-white p-3 text-xs">
+              {(Object.keys(PART_LABEL) as PartName[]).map((k) => (
+                <li key={k} className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 rounded-full ${pub.status[k] === 'ok' ? 'bg-emerald-500' : pub.status[k] === 'error' ? 'bg-red-500' : 'animate-pulse bg-slate-300'}`} />
+                  <span className="flex-1">{PART_LABEL[k]}</span>
+                  <span className="text-slate-400">{pub.status[k] === 'ok' ? 'ready' : pub.status[k] === 'error' ? 'unavailable' : 'loading'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {pub?.errors.weather && <p className="mt-3 text-center text-xs text-red-700">Weather could not be loaded: {pub.errors.weather}</p>}
+        </div>
       </div>
     );
   }
@@ -73,6 +98,9 @@ function Pages() {
   switch (route.page) {
     case 'overview': page = <Overview />; break;
     case 'water': page = <Water />; break;
+    case 'satellite': page = <Satellite />; break;
+    case 'evidence': page = <Evidence />; break;
+    case 'sources': page = <Sources />; break;
     case 'boroughs': page = <Boroughs />; break;
     case 'borough': page = <BoroughDetail code={route.code} />; break;
     case 'ward': page = <WardDetail key={route.ward} ward={route.ward} />; break;

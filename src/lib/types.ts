@@ -1,5 +1,7 @@
 import type { AlertLevel, AlertType, RiskResult, TaskType } from '@shared/risk-engine';
 import type { VisionResult, WaterKind } from '@shared/vision';
+import type { PreventionResult } from '@shared/prevention';
+import type { PublicData } from './live';
 
 export type BoroughCode =
   | 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI' | 'VII' | 'VIII'
@@ -16,6 +18,8 @@ export interface Ward {
   neighbours: number[];
   boundary: 'datameet' | 'pending' | 'official';
   population: number;
+  /** Where the population figure comes from. */
+  populationSource?: 'census2011' | 'estimate' | 'kmc' | 'synthetic';
 }
 
 export interface WeatherWeek {
@@ -69,7 +73,7 @@ export interface BreedingSite {
   lat: number;
   lng: number;
   status: 'Open' | 'Treated' | 'Closed';
-  detectedBy: 'Field team' | 'Drone' | 'Citizen';
+  detectedBy: 'Field team' | 'Drone' | 'Citizen' | 'Open data';
   firstSeen: string;
   lastActionOn?: string;
   description: string;
@@ -154,8 +158,17 @@ export interface SatellitePass {
 
 export interface RainDay { date: string; mm: number }
 
+/** A place mapped in OpenStreetMap that commonly holds water (to inspect, not a confirmed breeding site). */
+export interface Candidate { id: string; ward: number; cat: string; lat: number; lng: number; name: string }
+
 export interface Db {
-  mode: 'demo' | 'supabase';
+  /** demo = synthetic drill data; public = live open data, no KMC database; supabase = live open data + KMC database. */
+  mode: 'demo' | 'public' | 'supabase';
+  /** True when asOf is today; false when replaying a past date. */
+  live?: boolean;
+  /** Live open-data layers (weather, satellite, land cover, OpenStreetMap). Absent in the drill. */
+  pub?: PublicData;
+  candidates?: Candidate[];
   asOf: string; // ISO date of "today"
   weeks: string[]; // all week starts (Mondays) up to and including the current partial week
   wards: Ward[];
@@ -192,6 +205,8 @@ export interface WardStats {
   overdueTasks: number;
   water: WardWater;
   risk: RiskResult;
+  prevention: PreventionResult;
+  candidates: Record<string, number>;
 }
 
 export type { AlertLevel, AlertType, RiskResult, TaskType, WaterKind };

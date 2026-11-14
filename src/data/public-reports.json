@@ -1,0 +1,83 @@
+{
+  "note": "Dengue and waterlogging facts that KMC or the press have published. Used for context and to check the prevention index, which never sees these records.",
+  "dengueHotspotReports": [
+    {
+      "id": "mp-2022-w42",
+      "date": "2022-11-02",
+      "publisher": "Millennium Post",
+      "title": "Dengue cases between 41st & 42nd week: 'Borough XII worst-affected'",
+      "url": "https://www.millenniumpost.in/kolkata/dengue-cases-between-41st-42nd-week-borough-xii-worst-affected-497774",
+      "claim": "State health department survey: Borough XII recorded the most new cases in week 42 (965). Highest wards: 106 (386), 101 (188), 112 (134), 109 (131), 107 (130), 99 (116), 115 (116).",
+      "wards": [106, 101, 112, 109, 107, 99, 115],
+      "boroughs": { "XII": 965, "X": 684, "IX": 338, "XI": 321, "XIII": 299, "VIII": 277, "I": 247, "XIV": 244, "VII": 199, "VI": 160 }
+    },
+    {
+      "id": "tt-2022-borough12",
+      "date": "2022-09-14",
+      "publisher": "The Telegraph",
+      "title": "Dengue hotspots across Tollygunge and Kasba in Borough XII",
+      "url": "https://obeta.ttef.in/my-kolkata/news/dengue-hotspots-across-tollygunge-and-kasba-in-borough-xii-of-kolkata-municipal-corporation/cid/1886457",
+      "claim": "KMC report: Ward 106 had the most cases of all 144 wards; adjoining pockets of wards 105, 106 and 107 worst affected; Phulbagan in ward 101 badly affected.",
+      "wards": [105, 106, 107, 101]
+    },
+    {
+      "id": "tt-2022-north",
+      "date": "2022-10-25",
+      "publisher": "The Telegraph",
+      "title": "South or north: how civic apathy binds dengue-hit pockets in Kolkata",
+      "url": "https://obeta.ttef.in/my-kolkata/news/south-or-north-how-civic-apathy-binds-dengue-hit-pockets-in-kolkata/cid/1895642",
+      "claim": "Borough III wards 31 and 32 reporting daily infections; wards 13, 14 and 33 'many cases'; ward 6 three or four cases a day. Common features: uncleared waste on vacant plots, clogged open drains.",
+      "wards": [31, 32, 13, 14, 33, 6]
+    },
+    {
+      "id": "anv-2023-south",
+      "date": "2023-05-02",
+      "publisher": "Asia News Network (The Statesman)",
+      "title": "80 per cent of dengue cases in Kolkata originated from South Kolkata: study",
+      "url": "https://asianews.network/?p=95479",
+      "claim": "KMC study: about 80% of cases are in south Kolkata; boroughs 8 to 14 are more vulnerable because of vacant land, buildings under construction and water bodies.",
+      "wards": [],
+      "boroughList": ["VIII", "IX", "X", "XI", "XII", "XIII", "XIV"]
+    },
+    {
+      "id": "sns-22wards",
+      "date": null,
+      "publisher": "The Statesman",
+      "title": "KMC heightens dengue surveillance in 22 wards across eight Kolkata boroughs",
+      "url": "https://www.thestatesman.com/bengal/kmc-heightens-dengue-surveillance-in-22-wards-across-eight-kolkata-boroughs-1503227681.html",
+      "claim": "22 wards under additional monitoring after more reported cases (article undated; cites cases up to 29 September).",
+      "wards": [4, 6, 14, 68, 85, 90, 73, 74, 93, 94, 95, 96, 97, 102, 107, 108, 116, 117, 118, 121, 129, 131]
+    },
+    {
+      "id": "mp-2025-7wards",
+      "date": "2025-08-19",
+      "publisher": "Millennium Post",
+      "title": "KMC identifies 7 dengue-prone wards in city",
+      "url": "https://www.millenniumpost.in/bengal/kmc-identifies-7-dengue-prone-wards-in-city-623561",
+      "claim": "Based on borough-level fieldwork since March: wards 66, 67 (Topsia, Picnic Garden), 69, 70, 77, 93 (Lake Gardens) and 108 (Gulshan Colony).",
+      "wards": [66, 67, 69, 70, 77, 93, 108]
+    }
+  ],
+  "cityTotals": [
+    { "period": "1 Jan – 2 Nov 2023", "cases": 12334, "source": "KMC Health Department, 2026-27 budget data", "publisher": "Millennium Post", "url": "https://www.millenniumpost.in/bengal/kmc-reports-91-fall-in-dengue-cases-since-2023-648656" },
+    { "period": "Up to 3 Nov 2024", "cases": 865, "source": "KMC", "publisher": "The Statesman", "url": "https://www.thestatesman.com/bengal/city-records-93pc-less-dengue-cases-from-last-year-1503362719.html" },
+    { "period": "1 Jan – 2 Nov 2025", "cases": 1106, "source": "KMC Health Department, 2026-27 budget data", "publisher": "The Statesman", "url": "https://www.thestatesman.com/bengal/kmc-records-91-pc-reductions-in-reported-dengue-cases-40-pc-malaria-cases-in-2025-1503561762.html" }
+  ],
+  "stateTotals": [
+    { "period": "Up to 31 Oct 2026 (week 44)", "cases": 14634, "previous": 17032, "previousPeriod": "same period 2025", "source": "West Bengal Health Minister at national review", "publisher": "UNI", "url": "https://www.uniindia.com/east-india/health-wb-centre-dengue-control/242536" }
+  ],
+  "context2026": { "date": "2026-10-10", "text": "State health department: six KMC wards among pockets with a sudden rise in new dengue cases over the past month; 3,948 cases statewide in September 2026.", "publisher": "The Hans India (IANS)", "url": "https://www.thehansindia.com/kolkata/dengue-surge-in-bengal-hotspots-raises-concern-ahead-of-durga-puja-1130952" },
+  "rainGauges": {
+    "event": "Cloudburst, night of 22–23 September 2025",
+    "publisher": "Deccan Chronicle (KMC gauge readings)",
+    "url": "https://www.deccanchronicle.com/amp/nation/ten-dead-as-torrential-rain-paralyses-kolkata-1905631",
+    "readings": [
+      { "station": "Garia Kamdahari", "mm": 332, "query": "Kamdahari, Garia, Kolkata" },
+      { "station": "Jodhpur Park", "mm": 285, "query": "Jodhpur Park, Kolkata" },
+      { "station": "Kalighat", "mm": 280, "query": "Kalighat, Kolkata" },
+      { "station": "Topsia", "mm": 275, "query": "Topsia, Kolkata" },
+      { "station": "Ballygunge", "mm": 264, "query": "Ballygunge, Kolkata" },
+      { "station": "Thanthania", "mm": 195, "query": "Thanthania, Kolkata" }
+    ]
+  }
+}

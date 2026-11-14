@@ -116,3 +116,56 @@ export function Spark({ values, color = '#0B5F59', width = 120 }: { values: numb
     </svg>
   );
 }
+
+/** Daily rain (bars) with temperature (line); dates after `today` are forecast and drawn lighter. */
+export function RainChart({ dates, rain, tmean, today, height = 220, rainMax }: { dates: string[]; rain: (number | null)[]; tmean?: (number | null)[]; today: string; height?: number; rainMax?: (number | null)[] }) {
+  const data = dates.map((d, i) => ({
+    day: fmtDate(d, false), date: d,
+    rain: d <= today ? rain[i] ?? 0 : null,
+    forecast: d > today ? rain[i] ?? 0 : null,
+    max: rainMax ? rainMax[i] ?? null : null,
+    t: tmean ? tmean[i] ?? null : null,
+  }));
+  return (
+    <div role="img" aria-label="Daily rainfall and temperature">
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={data} margin={{ top: 8, right: 4, left: -14, bottom: 0 }}>
+          <CartesianGrid stroke="#E2E8F0" vertical={false} />
+          <XAxis dataKey="day" tick={AXIS} interval={Math.max(0, Math.ceil(data.length / 9) - 1)} />
+          <YAxis yAxisId="r" tick={AXIS} />
+          {tmean && <YAxis yAxisId="t" orientation="right" tick={AXIS} domain={[15, 35]} />}
+          <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v: number, n: string) => [n.includes('°C') ? `${v?.toFixed?.(1)} °C` : `${v?.toFixed?.(1)} mm`, n]} />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Bar isAnimationActive={false} yAxisId="r" dataKey="rain" name="Rain, city mean (mm)" fill="#3B82F6" />
+          <Bar isAnimationActive={false} yAxisId="r" dataKey="forecast" name="Forecast rain (mm)" fill="#BFDBFE" />
+          {rainMax && <Line isAnimationActive={false} yAxisId="r" dataKey="max" name="Wettest borough (mm)" stroke="#1E3A8A" strokeDasharray="3 3" dot={false} strokeWidth={1} />}
+          {tmean && <Line isAnimationActive={false} yAxisId="t" dataKey="t" name="Mean temperature (°C)" stroke="#DC2626" dot={false} strokeWidth={1.5} />}
+          <ReferenceLine yAxisId="r" x={fmtDate(today, false)} stroke="#0F172A" strokeDasharray="2 2" label={{ value: 'today', fontSize: 10, fill: '#0F172A', position: 'top' }} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** New water detected by radar on each pass (ha, whole city) against rain in the preceding 6 days. */
+export function RadarSeason({ points, height = 240, onPick, selected }: { points: { date: string; newHa: number; rain6: number; id: string }[]; height?: number; onPick?: (id: string) => void; selected?: string }) {
+  const data = points.map((p) => ({ ...p, day: fmtDate(p.date) }));
+  return (
+    <div role="img" aria-label="New water per radar pass">
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={data} margin={{ top: 8, right: 4, left: -10, bottom: 0 }} onClick={(e: { activePayload?: { payload: { id: string } }[] }) => { const id = e?.activePayload?.[0]?.payload?.id; if (id && onPick) onPick(id); }}>
+          <CartesianGrid stroke="#E2E8F0" vertical={false} />
+          <XAxis dataKey="day" tick={AXIS} interval={Math.max(0, Math.ceil(data.length / 8) - 1)} />
+          <YAxis yAxisId="w" tick={AXIS} />
+          <YAxis yAxisId="r" orientation="right" tick={AXIS} />
+          <Tooltip contentStyle={{ fontSize: 12 }} />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Bar isAnimationActive={false} yAxisId="w" dataKey="newHa" name="New water seen by radar (ha)" fill="#0B5F59">
+            {data.map((d) => <Cell key={d.id} fill={d.id === selected ? '#F59E0B' : '#0B5F59'} cursor="pointer" />)}
+          </Bar>
+          <Line isAnimationActive={false} yAxisId="r" dataKey="rain6" name="Rain in the 6 days before (mm)" stroke="#3B82F6" dot={{ r: 2 }} strokeWidth={1.5} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

@@ -84,7 +84,7 @@ function PhotoAnalyzer({ defaultWard }: { defaultWard: number }) {
     <Card title={<span className="flex items-center gap-2"><ScanSearch size={17} /> Analyse a photo with AI</span>}
       subtitle="Drone frame, field-team photo, citizen complaint or CCTV still. The AI finds standing water and the containers holding it.">
       {ch === null ? <p className="text-sm text-slate-500">Checking AI availability…</p> : ch.channel === 'none' ? (
-        <Empty>AI photo analysis runs on the KMC server deployment (or inside Claude). It is not available in this view.</Empty>
+        <Empty>AI photo analysis is switched off on this deployment (no vision key configured yet).</Empty>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           <div className="space-y-3">
@@ -133,15 +133,16 @@ function PhotoAnalyzer({ defaultWard }: { defaultWard: number }) {
   );
 }
 
-type SourceStatus = 'Built in MVP' | 'Pipeline written' | 'Needs KMC feed' | 'Phase 2';
+type SourceStatus = 'Live' | 'Built, needs KMC feed' | 'Phase 2';
 const SOURCE_INFO: { source: string; sees: string; detail: string; status: SourceStatus }[] = [
-  { source: 'KMC drones', sees: 'Rooftop water, uncovered tanks, tyres, construction sites', detail: 'Centimetre imagery; AI scans every frame instead of manual review', status: 'Built in MVP' },
-  { source: 'Field and citizen photos', sees: 'Containers, drains, premises the sky cannot see', detail: 'Phone photo → AI check in seconds → spot with GPS', status: 'Built in MVP' },
-  { source: 'Rain + terrain model', sees: 'Pockets that usually pool after heavy rain', detail: 'Historical satellite water frequency + elevation; flags spots the day it rains', status: 'Built in MVP' },
-  { source: 'Sentinel-1C/1D radar', sees: 'Open waterlogging, flooded vacant plots, overflowing ponds', detail: '10 m pixels, every 6 days, sees through monsoon cloud; free (Copernicus)', status: 'Pipeline written' },
-  { source: 'Sentinel-2 optical', sees: 'Pools, ponds, waterlogged land on clear days', detail: '10 m, every 5 days, blocked by cloud', status: 'Pipeline written' },
-  { source: 'NISAR L-band radar', sees: 'Water under vegetation and in mixed urban land', detail: 'NASA-ISRO, 12-day repeat, free; products within about 72 h', status: 'Phase 2' },
-  { source: 'KMC rain gauges and flood sensors (FFEWS)', sees: 'Where and how much it rained; streets under water', detail: 'Real-time feed from the KMC control room', status: 'Needs KMC feed' },
+  { source: 'Sentinel-1 radar (Copernicus)', sees: 'Open waterlogging, flooded vacant plots, overflowing ponds', detail: '10 m, every 6–12 days, through cloud; each pass compared with a dry-season pass; 250 m spots', status: 'Live' },
+  { source: 'Rain trigger + reported pockets', sees: 'Pockets that pool after heavy rain', detail: '≥ 40 mm modelled rain on a borough flags its 30+ publicly reported waterlogging pockets the same day', status: 'Live' },
+  { source: 'Field and citizen photos (AI)', sees: 'Containers, drains, premises the sky cannot see', detail: 'Phone photo → AI check in seconds → spot with GPS', status: 'Live' },
+  { source: 'Sentinel-2 optical', sees: 'True-colour view of pools and ponds on clear days', detail: '10 m, every 5 days, blocked by cloud; used for visual checks', status: 'Live' },
+  { source: 'OpenStreetMap sites', sees: 'Tyre shops, scrap yards, construction sites, markets, ponds', detail: 'Inspection targets in every ward, refreshed weekly', status: 'Live' },
+  { source: 'KMC drones', sees: 'Rooftop water, uncovered tanks, tyres, construction sites', detail: 'AI scans every frame of a flight instead of manual review', status: 'Built, needs KMC feed' },
+  { source: 'KMC rain gauges and flood sensors (FFEWS)', sees: 'Measured rain per locality; streets under water', detail: 'Replaces modelled rain in the rain trigger', status: 'Built, needs KMC feed' },
+  { source: 'NISAR L-band radar', sees: 'Water under vegetation and in mixed urban land', detail: 'NASA–ISRO, 12-day repeat, free', status: 'Phase 2' },
   { source: 'Kolkata Police / KMC CCTV', sees: 'Street waterlogging at junctions', detail: 'AI on still frames from the integrated control room', status: 'Phase 2' },
 ];
 
@@ -209,7 +210,7 @@ export function Water() {
         <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm">
           <Radar className="mt-0.5 shrink-0 text-kmc-600" size={20} />
           <div>
-            <b>Radar:</b> {v.lastS1 ? <>{v.lastS1.platform} pass {fmtDate(v.lastS1.date, false)} found {v.lastS1.detections} water patches; next pass about {fmtDate(addDays(v.lastS1.date, 6), false)}.</> : 'no pass yet.'}
+            <b>Radar:</b> {v.lastS1 ? <>{v.lastS1.platform} pass {fmtDate(v.lastS1.date, false)} located {v.lastS1.detections} water spots; next pass within 6–12 days. <a className="text-kmc-700 underline" href={href.satellite}>Open radar map</a></> : 'no processed pass yet.'}
             {v.lastNisar && <> NISAR {fmtDate(v.lastNisar.date, false)}: {v.lastNisar.status === 'Awaiting data' ? 'awaiting data' : `${v.lastNisar.detections} patches`}.</>}
           </div>
         </div>
@@ -304,11 +305,11 @@ export function Water() {
           {SOURCE_INFO.map((s) => (
             <tr key={s.source}>
               <td className="px-2 py-2 font-medium">{s.source}</td><td className="px-2 py-2">{s.sees}</td><td className="px-2 py-2 text-slate-600">{s.detail}</td>
-              <td className="px-2 py-2"><Pill tone={s.status === 'Built in MVP' ? 'green' : s.status === 'Pipeline written' ? 'blue' : s.status === 'Needs KMC feed' ? 'amber' : 'slate'}>{s.status}</Pill></td>
+              <td className="px-2 py-2"><Pill tone={s.status === 'Live' ? 'green' : s.status === 'Built, needs KMC feed' ? 'amber' : 'slate'}>{s.status}</Pill></td>
             </tr>
           ))}
         </Table>
-        {db.mode === 'demo' && <p className="mt-2 text-xs text-amber-700">Demo: detections shown are synthetic. Photo analysis above is live.</p>}
+        {db.mode === 'demo' && <p className="mt-2 text-xs text-amber-700">Drill: detections shown are simulated. Photo analysis above is live.</p>}
       </Card>
     </>
   );
