@@ -117,7 +117,7 @@ export async function hotspots() {
     for (const r of ev.readings) {
       if (seen.has(r.station)) continue;
       seen.add(r.station);
-      const loc = await locate([r.query]);
+      const loc = await locate(r.queries ?? [r.query]);
       gauges.push({ station: r.station, ...loc, borough: loc.ward != null ? W.get(loc.ward)?.borough ?? null : null });
     }
   }

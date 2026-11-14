@@ -188,7 +188,11 @@
         {
           "station": "Kamdahari (Garia)",
           "mm": 332,
-          "query": "Kamdahari, Kolkata"
+          "query": "Kamdahari, Kolkata",
+          "queries": [
+            "Kamdahari, Kolkata",
+            "Garia, Kolkata"
+          ]
         },
         {
           "station": "Jodhpur Park",
@@ -253,17 +257,29 @@
         {
           "station": "Pagladanga (Tangra)",
           "mm": 201,
-          "query": "Pagladanga, Kolkata"
+          "query": "Pagladanga, Kolkata",
+          "queries": [
+            "Pagladanga, Kolkata",
+            "Tangra, Kolkata"
+          ]
         },
         {
           "station": "Kulia (Tangra)",
           "mm": 196,
-          "query": "Kulia, Tangra, Kolkata"
+          "query": "Kulia, Tangra, Kolkata",
+          "queries": [
+            "Kulia, Tangra, Kolkata",
+            "Tangra, Kolkata"
+          ]
         },
         {
           "station": "Thanthania",
           "mm": 195,
-          "query": "Thanthania, Kolkata"
+          "query": "Thanthania, Kolkata",
+          "queries": [
+            "Thanthania Kalibari, Kolkata",
+            "Bidhan Sarani, Kolkata"
+          ]
         }
       ],
       "imd": {
