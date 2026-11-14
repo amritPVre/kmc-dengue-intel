@@ -36,7 +36,7 @@ export function applyGauges(pub: PublicData): PublicData {
       const modelled = b.rain[i] ?? 0;
       if (mm > modelled) {
         b.rain[i] = mm;
-        gaugeDays.push({ date: ev.date, borough: b.borough, mm, modelled, stations: inB.length ? inB.map((r) => r.station) : ['median of KMC gauges'] });
+        gaugeDays.push({ date: ev.date, borough: b.borough, mm, modelled, stations: inB.length ? [...inB].sort((x, y) => y.mm - x.mm).map((r) => r.station) : [] });
       }
     }
   }
@@ -132,8 +132,10 @@ export function derivedDetections(pub: PublicData, asOf: string): WaterDetection
         if (WARD_META[p.ward!]?.borough !== b.borough) continue;
         const id = `rain:${d}:${p.name}`;
         if (out.some((x) => x.id === id)) continue;
+        const gauge = pub.weather?.gaugeDays?.find((g) => g.date === d && g.borough === b.borough);
+        const rainText = !gauge ? `${mm.toFixed(0)} mm modelled rain` : gauge.stations.length ? `${mm.toFixed(0)} mm at KMC gauge ${gauge.stations[0]}` : `${mm.toFixed(0)} mm (median of KMC gauges that day)`;
         out.push({
-          id, ward: p.ward!, lat: p.lat!, lng: p.lng!, source: 'Rain + terrain model', sensor: `${mm.toFixed(0)} mm modelled rain · reported pocket: ${p.name}`,
+          id, ward: p.ward!, lat: p.lat!, lng: p.lng!, source: 'Rain + terrain model', sensor: `${rainText} · reported pocket: ${p.name}`,
           kind: 'Street / open waterlogging', detectedAt: `${d}T18:00:00+05:30`, waterSince: d, confidence: Math.min(0.8, 0.35 + mm / 200), status: 'New', aedesRisk: mm >= 80 ? 'High' : 'Medium',
         });
       }
